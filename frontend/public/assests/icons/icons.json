@@ -1,0 +1,10 @@
+{
+  "database": "/assets/icons/db.svg",
+  "cache": "/assets/icons/redis.svg",
+  "service": "/assets/icons/service.svg",
+  "loadbalancer": "/assets/icons/loadbalancer.svg",
+  "identity": "/assets/icons/key.svg",
+  "external": "/assets/icons/external.svg",
+  "aws:s3": "/assets/icons/aws/s3.svg",
+  "gcp:pubsub": "/assets/icons/gcp/pubsub.svg"
+}
