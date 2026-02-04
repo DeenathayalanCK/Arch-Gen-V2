@@ -3,21 +3,22 @@ from app.ir.diagram import DiagramIR
 
 def compile_to_mermaid(diagram: DiagramIR) -> str:
     """
-    STEP 14 — Enterprise layout compiler
-
     Guarantees:
-    - Layered top-down architecture
-    - Explicit request + response flows
-    - Data read/write loops
     - Planner group ordering respected
+    - Layered enterprise layout
+    - Request → response only when valid
+    - Data read/write only when relevant
+    - No edge explosion
     """
 
     lines: list[str] = ["flowchart TD"]
     emitted: set[tuple[str, str, str]] = set()
 
     # ==================================================
-    # GROUPS (planner order respected)
+    # GROUPS (planner order is law)
     # ==================================================
+    grouped_nodes: set[str] = set()
+
     for group in diagram.groups:
         lines.append(f'subgraph {group.id}["{_escape(group.label)}"]')
 
@@ -26,6 +27,7 @@ def compile_to_mermaid(diagram: DiagramIR) -> str:
             if not node:
                 continue
 
+            grouped_nodes.add(node.id)
             lines.append(
                 _node_template(node.kind).format(
                     id=node.id,
@@ -48,7 +50,7 @@ def compile_to_mermaid(diagram: DiagramIR) -> str:
             )
 
     # ==================================================
-    # EXPLICIT EDGES (planner truth)
+    # EXPLICIT EDGES (planner truth only)
     # ==================================================
     for edge in diagram.edges:
         arrow = "-->" if edge.style == "solid" else "-.->"
@@ -63,7 +65,7 @@ def compile_to_mermaid(diagram: DiagramIR) -> str:
         )
 
     # ==================================================
-    # STEP 14A — REQUEST / RESPONSE ENFORCEMENT
+    # STEP 15A — REQUEST / RESPONSE (guarded)
     # ==================================================
     for edge in diagram.edges:
         src = _find_node(diagram, edge.source)
@@ -72,22 +74,37 @@ def compile_to_mermaid(diagram: DiagramIR) -> str:
         if not src or not tgt:
             continue
 
-        # Actor -> Capability implies response
         if src.kind == "actor" and tgt.kind == "capability":
-            key = (tgt.id, src.id, "response")
-            if key not in emitted:
-                emitted.add(key)
+            response = (tgt.id, src.id, "response")
+            if response not in emitted:
+                emitted.add(response)
                 lines.append(f"{tgt.id} -->|response| {src.id}")
 
     # ==================================================
-    # STEP 14B — CAPABILITY ↔ DATA LOOPS
+    # STEP 15B — CAPABILITY ↔ DATA (controlled)
     # ==================================================
     for cap in diagram.nodes:
         if cap.kind != "capability":
             continue
 
+        cap_name = cap.id.lower()
+
         for data in diagram.nodes:
             if data.kind != "data":
+                continue
+
+            data_name = data.id.lower()
+
+            # --- Ownership heuristics ---
+            related = False
+
+            if "auth" in cap_name or "session" in cap_name:
+                related = "session" in data_name or "auth" in data_name
+
+            elif "data" in cap_name or "retrieve" in cap_name or "store" in cap_name:
+                related = "user" in data_name or "data" in data_name
+
+            if not related:
                 continue
 
             read = (cap.id, data.id, "read")
