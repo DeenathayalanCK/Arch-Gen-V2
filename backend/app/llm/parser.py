@@ -1,17 +1,59 @@
 import json
+import re
+from typing import Any, Dict
+
 from app.ir.business_ir import BusinessIR, Actor, BusinessFlow, BusinessStep
 from app.ir.service_ir import ServiceIR, Service, ServiceDependency
 from app.ir.data_ir import DataIR, DataStore, DataAccess
 from app.ir.infra_ir import InfraIR, ComputeNode, NetworkBoundary
 
 
+# ============================================================
+# SAFE JSON LOADER (LLM TRUST BOUNDARY)
+# ============================================================
+
+def safe_load_json(json_text: str) -> Dict[str, Any]:
+    """
+    Safely extract and parse JSON from LLM output.
+
+    Strategy:
+    1. Try direct json.loads (fast path)
+    2. Fallback to extracting first JSON object
+    3. Fail gracefully with empty dict
+
+    NEVER throws.
+    """
+
+    if not json_text or not isinstance(json_text, str):
+        return {}
+
+    # Fast path
+    try:
+        return json.loads(json_text)
+    except Exception:
+        pass
+
+    # Fallback: extract first JSON object
+    match = re.search(r"\{.*\}", json_text, re.DOTALL)
+    if not match:
+        return {}
+
+    try:
+        return json.loads(match.group(0))
+    except Exception:
+        return {}
+
+
+# ============================================================
+# BUSINESS PARSER
+# ============================================================
+
 def parse_business(json_text: str) -> BusinessIR:
-    data = json.loads(json_text)
+    data = safe_load_json(json_text)
 
     # ---- ACTORS ----
     actors = []
     for a in data.get("actors", []):
-        # CASE 1: actor is a string
         if isinstance(a, str):
             actors.append(
                 Actor(
@@ -19,8 +61,6 @@ def parse_business(json_text: str) -> BusinessIR:
                     role="unknown",
                 )
             )
-
-        # CASE 2: actor is a dict
         elif isinstance(a, dict):
             actors.append(
                 Actor(
@@ -39,7 +79,6 @@ def parse_business(json_text: str) -> BusinessIR:
 
         steps = []
         for s in f.get("steps", []):
-            # CASE 1: step is a string
             if isinstance(s, str):
                 steps.append(
                     BusinessStep(
@@ -48,8 +87,6 @@ def parse_business(json_text: str) -> BusinessIR:
                         order=len(steps) + 1,
                     )
                 )
-
-            # CASE 2: step is a dict
             elif isinstance(s, dict):
                 actor = s.get("actor", "unknown")
                 if actor not in actor_ids and actor_ids:
@@ -77,31 +114,26 @@ def parse_business(json_text: str) -> BusinessIR:
     )
 
 
+# ============================================================
+# SERVICE PARSER
+# ============================================================
 
 def parse_service(json_text: str) -> ServiceIR:
-    data = json.loads(json_text)
+    data = safe_load_json(json_text)
 
     services = []
     for s in data.get("services", []):
-        # CASE 1: service is a string
         if isinstance(s, str):
             name = s
-
-        # CASE 2: service is a dict
         elif isinstance(s, dict):
             name = s.get("name", "unknown")
-
         else:
             continue
 
         if not name.endswith("Service"):
             name = f"{name}Service"
 
-        services.append(
-            Service(
-                name=name
-            )
-        )
+        services.append(Service(name=name))
 
     return ServiceIR(
         name="Services",
@@ -109,13 +141,15 @@ def parse_service(json_text: str) -> ServiceIR:
     )
 
 
+# ============================================================
+# DATA PARSER
+# ============================================================
 
 def parse_data(json_text: str) -> DataIR:
-    data = json.loads(json_text)
+    data = safe_load_json(json_text)
 
     datastores = []
     for d in data.get("datastores", []):
-        # CASE 1: d is a string (e.g. "database")
         if isinstance(d, str):
             datastores.append(
                 DataStore(
@@ -123,8 +157,6 @@ def parse_data(json_text: str) -> DataIR:
                     store_type="unknown",
                 )
             )
-
-        # CASE 2: d is a dict
         elif isinstance(d, dict):
             datastores.append(
                 DataStore(
@@ -151,9 +183,12 @@ def parse_data(json_text: str) -> DataIR:
     )
 
 
+# ============================================================
+# INFRA PARSER
+# ============================================================
 
 def parse_infra(json_text: str) -> InfraIR:
-    data = json.loads(json_text)
+    data = safe_load_json(json_text)
 
     compute = []
     for c in data.get("compute", []):
@@ -194,4 +229,3 @@ def parse_infra(json_text: str) -> InfraIR:
         compute=compute,
         network=network,
     )
-

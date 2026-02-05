@@ -6,7 +6,7 @@ from app.ir.business_ir import BusinessIR
 from app.ir.service_ir import ServiceIR
 from app.ir.data_ir import DataIR
 from app.ir.infra_ir import InfraIR
-
+from app.ir.responsibility_ir import ServiceResponsibilities
 
 # ============================================================
 # Mermaid ID helper (CRITICAL FIX)
@@ -89,16 +89,32 @@ class MermaidDiagram:
 
     # ---------- services ----------
 
-    def add_services(self, ir: ServiceIR):
+    def add_services_with_responsibilities(
+        self,
+        service_ir: ServiceIR,
+        responsibility_map: dict[str, ServiceResponsibilities],
+    ):
         self.lines.append("  %% Service Layer")
 
-        services = sorted(ir.services, key=lambda s: s.name)
-        for service in services:
-            service_id = mermaid_id(service.name)
-            self._add_node(
-                node_id=f"svc_{service_id}",
-                label=f"Service: {service.name}",
+        for service in sorted(service_ir.services, key=lambda s: s.name):
+            svc_safe = mermaid_id(service.name)
+            subgraph_id = f"svc_{svc_safe}"
+
+            self.lines.append(
+                f'  subgraph {subgraph_id}["Service: {service.name}"]'
             )
+
+            resp_bundle = responsibility_map.get(service.id)
+
+            if resp_bundle:
+                for resp in resp_bundle.responsibilities:
+                    resp_id = f"{subgraph_id}_{mermaid_id(resp.name)}"
+                    self._add_node(
+                        resp_id,
+                        resp.name,
+                    )
+
+            self.lines.append("  end")
 
     # ---------- data ----------
 
@@ -161,7 +177,10 @@ def compile_diagram(context: PipelineContext) -> str:
         diagram.add_business(context.business_ir)
 
     if context.service_ir:
-        diagram.add_services(context.service_ir)
+        diagram.add_services_with_responsibilities(
+            context.service_ir,
+            context.responsibility_map,
+        )
 
     if context.data_ir:
         diagram.add_data(context.data_ir)
