@@ -15,7 +15,7 @@ class PipelineContext:
 
     # Decomposition
     decomposed: DecomposedRequirements | None = None
-
+    #decomposed: Optional[DecomposedRequirements] = None
     # IR layers
     business_ir: Optional[BusinessIR] = None
     service_ir: Optional[ServiceIR] = None
@@ -28,3 +28,5 @@ class PipelineContext:
     @property
     def requirements(self) -> str:
         return self.requirements_text
+    def add_error(self, message: str):
+        self.errors.append(message)

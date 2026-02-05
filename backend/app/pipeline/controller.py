@@ -1,10 +1,11 @@
 from app.pipeline.context import PipelineContext
 from app.pipeline.business_stage import BusinessStage
 from app.pipeline.service_stage import ServiceStage
+from app.pipeline.responsibility_stage import ResponsibilityExpansionStage
 from app.pipeline.data_stage import DataStage
 from app.pipeline.infra_stage import InfraStage
 from app.pipeline.decomposition_stage import DecompositionStage
-
+from app.pipeline.reference_injection_stage import ReferenceInjectionStage
 class PipelineController:
     MAX_RETRIES = 2
 
@@ -15,6 +16,8 @@ class PipelineController:
             ServiceStage(),
             DataStage(),
             InfraStage(),
+            ReferenceInjectionStage(),      
+            ResponsibilityExpansionStage(),
         ]
 
     def run(self, requirements_text: str) -> PipelineContext:

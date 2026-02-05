@@ -1,5 +1,5 @@
 from app.pipeline.stage import PipelineStage
-from app.llm.client import LLMClient, load_prompt
+from app.llm.client import LLMClient
 from app.llm.parser import parse_business
 from app.ir.validation import ValidationResult
 
@@ -7,18 +7,24 @@ from app.ir.validation import ValidationResult
 class BusinessStage(PipelineStage):
     name = "business"
 
+    def __init__(self):
+        self.client = LLMClient()
+
     def run(self, context):
-        if not context.decomposed.business:
+        if not context.decomposed or not context.decomposed.business:
             context.business_ir = None
             return ValidationResult.success()
 
-        prompt = load_prompt("business.txt")
-        full_prompt = prompt + "\n\n" + "\n".join(context.decomposed.business)
+        prompt = (
+            "Extract structured business information from the following requirements:\n\n"
+            + "\n".join(context.decomposed.business)
+        )
 
         try:
-            output = LLMClient().generate(full_prompt)
-            context.business_ir = parse_business(output)
-            return context.business_ir.validate()
+            raw = self.client.generate(prompt)
+            ir = parse_business(raw)
+            context.business_ir = ir
+            return ValidationResult.success()
         except Exception as e:
             context.business_ir = None
             return ValidationResult.failure([str(e)])
