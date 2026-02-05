@@ -1,0 +1,22 @@
+Extract business actors and business steps from the input.
+
+Return JSON exactly like this:
+
+{
+  "actors": [],
+  "flows": [
+    {
+      "name": "",
+      "steps": [
+        { "name": "", "actor": "", "order": 1 }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Use ONLY provided text
+- Do NOT invent actors
+- Do NOT invent steps
+- Actors must be explicitly mentioned
+- JSON only

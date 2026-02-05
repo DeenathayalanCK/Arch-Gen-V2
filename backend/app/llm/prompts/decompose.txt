@@ -1,0 +1,21 @@
+Classify each sentence into zero or more of these categories:
+
+- business: user actions, goals, workflows, or domain behavior
+- service: named software systems, APIs, or backend components
+- data: databases, storage, or persistence
+- infra: cloud, servers, scaling, networking
+
+Return JSON exactly like this:
+
+{
+  "business": [],
+  "service": [],
+  "data": [],
+  "infra": []
+}
+
+Rules:
+- User actions ALWAYS belong to business
+- Do NOT infer services from verbs
+- Use original sentences only
+- JSON only

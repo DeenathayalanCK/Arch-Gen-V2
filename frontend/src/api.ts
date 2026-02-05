@@ -6,14 +6,16 @@ export async function generateDiagram(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      prompt,
+      requirements: prompt, // ✅ FIX HERE
       detail_level: detailLevel,
     }),
   });
 
-  if (!res.ok) {
-    throw new Error("Backend error");
+  const data = await res.json();
+
+  if (!res.ok || data.status === "error") {
+    throw new Error(data.message || "Backend error");
   }
 
-  return res.json();
+  return data;
 }

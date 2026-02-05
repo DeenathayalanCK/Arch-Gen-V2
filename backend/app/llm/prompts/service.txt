@@ -1,0 +1,20 @@
+Extract application services.
+
+You MAY infer a service from a business action.
+
+Return JSON exactly like this:
+
+{
+  "services": [
+    {
+      "name": ""
+    }
+  ]
+}
+
+Rules:
+- Infer at most ONE service per sentence
+- Services must be application-level (not data or infra)
+- Do NOT invent databases, queues, or cloud resources
+- Names should end with "Service"
+- JSON only

@@ -1,22 +1,17 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional, Dict, Any
 
-class Actor(BaseModel):
-    id: str
-    description: str
 
-class Capability(BaseModel):
-    id: str
-    responsibility: str
-    state: Optional[str] = None
-    constraints: List[str] = []
+class GenerateRequest(BaseModel):
+    requirements: str
 
-class Interaction(BaseModel):
+
+class DiagramResponse(BaseModel):
+    type: str
     source: str
-    target: str
-    semantics: str
 
-class ArchitectureIR(BaseModel):
-    actors: List[Actor]
-    capabilities: List[Capability]
-    interactions: List[Interaction]
+
+class GenerateResponse(BaseModel):
+    status: str
+    ir: Dict[str, Optional[Dict[str, Any]]]
+    diagram: DiagramResponse

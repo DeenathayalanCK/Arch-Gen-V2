@@ -1,0 +1,14 @@
+Extract infrastructure hints from the input.
+
+Return JSON exactly in this format:
+
+{
+  "compute": [],
+  "network": []
+}
+
+Rules:
+- Use original terms only
+- Do NOT invent providers
+- Do NOT invent services
+- JSON only
