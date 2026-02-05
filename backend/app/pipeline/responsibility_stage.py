@@ -1,62 +1,43 @@
-from app.pipeline.context import PipelineContext
+from app.pipeline.stage import PipelineStage
+from app.ir.validation import ValidationResult
 from app.ir.responsibility_ir import ServiceResponsibilities, Responsibility
 from app.llm.client import LLMClient
 from app.llm.parser import safe_load_json
 
 
-class ResponsibilityExpansionStage:
-    """
-    Expands services into C4-L3 responsibilities.
-
-    This stage:
-    - NEVER invents infrastructure
-    - NEVER invents technologies
-    - Expands only within an existing service boundary
-    - Is safe against malformed LLM JSON
-    """
+class ResponsibilityExpansionStage(PipelineStage):
+    name = "responsibility_expansion"
 
     def __init__(self):
         self.client = LLMClient()
 
-    def run(self, context: PipelineContext) -> PipelineContext:
+    def run(self, context):
         if not context.service_ir:
-            return context
+            return ValidationResult.success()
+
+        if not hasattr(context, "responsibility_map") or context.responsibility_map is None:
+            context.responsibility_map = {}
 
         for service in context.service_ir.services:
-            responsibilities = self._expand_service(
-                service_name=service.name,
-                requirements=context.requirements_text,
-            )
-
-            context.responsibility_map[service.id] = ServiceResponsibilities(
-                service_id=service.id,
-                service_name=service.name,
-                responsibilities=responsibilities,
-            )
-
-        return context
-
-    def _expand_service(self, service_name: str, requirements: str):
-        prompt = f"""
+            prompt = f"""
 You are a software architect.
 
-Expand the responsibilities of the service below.
+Expand high-level responsibilities for the following service.
 
 Rules:
-- Do NOT invent technologies
 - Do NOT invent infrastructure
-- Use high-level responsibilities only
-- 3–6 responsibilities max
-- Responsibilities must be abstract (C4 L3)
-- Use nouns or short verb phrases
+- Do NOT invent technologies
+- Responsibilities must be C4 Level 3
+- 3 to 6 items max
+- Use abstract responsibilities
 
 Service:
-{service_name}
+{service.name}
 
 System requirements:
-{requirements}
+{context.requirements_text}
 
-Return JSON ONLY as a list:
+Return JSON ONLY:
 [
   {{
     "name": "...",
@@ -66,31 +47,31 @@ Return JSON ONLY as a list:
 ]
 """
 
-        raw = self.client.generate(prompt)
+            raw = self.client.generate(prompt)
+            parsed = safe_load_json(raw)
 
-        # 🔒 HARDENED JSON PARSING (shared trust boundary)
-        parsed = safe_load_json(raw)
-
-        # We expect a LIST — anything else is invalid
-        if not isinstance(parsed, list):
-            return []
-
-        responsibilities: list[Responsibility] = []
-
-        for r in parsed:
-            if not isinstance(r, dict):
+            if not isinstance(parsed, list):
                 continue
 
-            name = r.get("name")
-            if not name or not isinstance(name, str):
-                continue
+            responsibilities = []
+            for r in parsed:
+                if not isinstance(r, dict):
+                    continue
+                if not r.get("name"):
+                    continue
 
-            responsibilities.append(
-                Responsibility(
-                    name=name.strip(),
-                    description=r.get("description"),
-                    responsibility_type=r.get("type", "logic"),
+                responsibilities.append(
+                    Responsibility(
+                        name=r["name"],
+                        description=r.get("description"),
+                        responsibility_type=r.get("type", "logic"),
+                    )
                 )
+
+            context.responsibility_map[service.id] = ServiceResponsibilities(
+                service_id=service.id,
+                service_name=service.name,
+                responsibilities=responsibilities,
             )
 
-        return responsibilities
+        return ValidationResult.success()

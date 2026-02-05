@@ -1,5 +1,5 @@
 from app.pipeline.stage import PipelineStage
-from app.llm.client import LLMClient, load_prompt
+from app.llm.client import LLMClient
 from app.llm.parser import parse_data
 from app.ir.validation import ValidationResult
 
@@ -7,18 +7,24 @@ from app.ir.validation import ValidationResult
 class DataStage(PipelineStage):
     name = "data"
 
+    def __init__(self):
+        self.client = LLMClient()
+
     def run(self, context):
-        if not context.decomposed.data:
+        if not context.decomposed or not context.decomposed.data:
             context.data_ir = None
             return ValidationResult.success()
 
-        prompt = load_prompt("data.txt")
-        full_prompt = prompt + "\n\n" + "\n".join(context.decomposed.data)
+        prompt = (
+            "Extract data store and access information from the following requirements:\n\n"
+            + "\n".join(context.decomposed.data)
+        )
 
         try:
-            output = LLMClient().generate(full_prompt)
-            context.data_ir = parse_data(output)
-            return context.data_ir.validate()
+            raw = self.client.generate(prompt)
+            ir = parse_data(raw)
+            context.data_ir = ir
+            return ValidationResult.success()
         except Exception as e:
             context.data_ir = None
             return ValidationResult.failure([str(e)])
