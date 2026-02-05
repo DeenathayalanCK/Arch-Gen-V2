@@ -3,13 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 from sqlalchemy.exc import OperationalError
 
-from app.api import router
+from app.api.routes import router
 from app.db.session import engine
 from app.db.models import Base
 
 app = FastAPI(
     title="Architecture Diagram Generator",
-    version="0.1.0",
+    version="0.4.0",
 )
 
 # ✅ Middleware FIRST
@@ -27,7 +27,7 @@ app.include_router(router)
 
 @app.on_event("startup")
 def startup():
-    retries = 10
+    retries = 5
     delay = 2
 
     for attempt in range(retries):
@@ -39,4 +39,5 @@ def startup():
             print(f"⏳ Waiting for database... ({attempt + 1}/{retries})")
             time.sleep(delay)
 
-    raise RuntimeError("❌ Database not ready after retries")
+    # 🔴 DO NOT crash the app
+    print("⚠️ Database not ready — running without persistence")

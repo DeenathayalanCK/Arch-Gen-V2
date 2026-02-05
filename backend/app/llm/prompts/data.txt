@@ -1,0 +1,17 @@
+Extract data stores and access patterns.
+
+Output JSON:
+
+{
+  "datastores": [
+    { "name": "", "store_type": "sql|nosql|object|cache" }
+  ],
+  "access_patterns": [
+    { "service": "", "datastore": "", "access_type": "read|write|read_write" }
+  ]
+}
+
+Rules:
+- No invented databases
+- No vendor names unless specified
+- JSON only
