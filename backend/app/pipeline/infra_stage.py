@@ -1,30 +1,45 @@
 from app.pipeline.stage import PipelineStage
-from app.llm.client import LLMClient
-from app.llm.parser import parse_infra
+from app.pipeline.context import PipelineContext
+from app.ir.infra_ir import InfraIR, ComputeNode, NetworkBoundary
 from app.ir.validation import ValidationResult
 
 
 class InfraStage(PipelineStage):
     name = "infra"
 
-    def __init__(self):
-        self.client = LLMClient()
-
-    def run(self, context):
-        if not context.decomposed or not context.decomposed.infra:
-            context.infra_ir = None
+    def run(self, context: PipelineContext) -> ValidationResult:
+        if context.infra_ir and context.infra_ir.compute:
             return ValidationResult.success()
 
-        prompt = (
-            "Extract infrastructure data from the following requirements:\n\n"
-            + "\n".join(context.decomposed.infra)
+        compute = []
+        network = []
+
+        text = context.requirements_text.lower()
+
+        # -------- REFERENCE ARCHITECTURE RULES --------
+
+        if "cloud" in text:
+            compute.append(
+                ComputeNode(
+                    name="Application Runtime",
+                    compute_type="cloud",
+                )
+            )
+
+            network.append(
+                NetworkBoundary(
+                    name="Private Network",
+                    boundary_type="vpc",
+                )
+            )
+
+        if not compute:
+            return ValidationResult.success()
+
+        context.infra_ir = InfraIR(
+            name="Infrastructure",
+            compute=compute,
+            network=network,
         )
 
-        try:
-            raw = self.client.generate(prompt)
-            ir = parse_infra(raw)
-            context.infra_ir = ir
-            return ValidationResult.success()
-        except Exception as e:
-            context.infra_ir = None
-            return ValidationResult.failure([str(e)])
+        return ValidationResult.success()

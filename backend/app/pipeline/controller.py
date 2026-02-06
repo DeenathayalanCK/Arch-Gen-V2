@@ -6,6 +6,7 @@ from app.pipeline.data_stage import DataStage
 from app.pipeline.infra_stage import InfraStage
 from app.pipeline.decomposition_stage import DecompositionStage
 from app.pipeline.reference_injection_stage import ReferenceInjectionStage
+from app.pipeline.service_inference_stage import ServiceInferenceStage
 class PipelineController:
     MAX_RETRIES = 2
 
@@ -13,7 +14,8 @@ class PipelineController:
         self.stages = [
             DecompositionStage(),
             BusinessStage(),
-            ServiceStage(),
+            ServiceInferenceStage(),
+            #ServiceStage(),
             DataStage(),
             InfraStage(),
             ReferenceInjectionStage(),      
@@ -31,6 +33,12 @@ class PipelineController:
 
                 if result.is_valid:
                     break
+                
+                # 🔎 DEBUG: check decomposition output immediately
+            if stage.__class__.__name__ == "DecompositionStage":
+                print("\n===== DEBUG: DECOMPOSITION OUTPUT =====")
+                print(context.decomposed)
+                print("======================================\n")
 
             if not result or not result.is_valid:
                 if result:
