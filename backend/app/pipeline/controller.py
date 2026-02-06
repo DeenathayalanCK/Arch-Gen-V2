@@ -16,10 +16,11 @@ class PipelineController:
             BusinessStage(),
             ServiceInferenceStage(),
             #ServiceStage(),
+            ResponsibilityExpansionStage(),
             DataStage(),
             InfraStage(),
             ReferenceInjectionStage(),      
-            ResponsibilityExpansionStage(),
+            
         ]
 
     def run(self, requirements_text: str) -> PipelineContext:
