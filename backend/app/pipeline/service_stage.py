@@ -11,14 +11,18 @@ class ServiceStage(PipelineStage):
         self.client = LLMClient()
 
     def run(self, context):
-        if not context.decomposed or not context.decomposed.service and not context.decomposed.business:
+        # Check if decomposed exists and has any service or business content
+        service_lines = getattr(context.decomposed, 'service', None) or [] if context.decomposed else []
+        business_lines = getattr(context.decomposed, 'business', None) or [] if context.decomposed else []
+
+        if not service_lines and not business_lines:
             context.service_ir = None
             return ValidationResult.success()
 
         # build prompt on both decomposed.service and decomposed.business
         lines = []
-        lines.extend(context.decomposed.service or [])
-        lines.extend(context.decomposed.business or [])
+        lines.extend(service_lines)
+        lines.extend(business_lines)
 
         prompt = (
             "Extract structured services from the following requirements:\n\n"
