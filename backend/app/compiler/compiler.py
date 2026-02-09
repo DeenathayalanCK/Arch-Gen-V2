@@ -184,6 +184,69 @@ class MermaidDiagram:
                 label=f"Network: {net.name}",
             )
 
+    # ---------- business to service edges ----------
+
+    def add_business_to_service_edges(
+        self,
+        business_ir: BusinessIR,
+        service_ir: ServiceIR,
+    ):
+        """Connect business steps to edge services (entry points like Web Application)."""
+        if not business_ir or not service_ir:
+            return
+
+        # Find edge services (entry points for user interaction)
+        edge_services = [
+            svc for svc in service_ir.services
+            if svc.service_type == "edge" or "web" in svc.name.lower() or "api" in svc.name.lower()
+        ]
+
+        if not edge_services:
+            return
+
+        # Connect last business step to edge services
+        for flow in business_ir.flows:
+            if not flow.steps:
+                continue
+
+            # Get the last step in the flow (or first if only one)
+            last_step = sorted(flow.steps, key=lambda s: s.order)[-1]
+            step_node = f"biz_step_{mermaid_id(last_step.id)}"
+
+            for edge_svc in edge_services:
+                svc_node = f"svc_{mermaid_id(edge_svc.name)}"
+                self._add_edge(step_node, svc_node, "uses")
+
+    # ---------- service to infra edges ----------
+
+    def add_service_to_infra_edges(
+        self,
+        service_ir: ServiceIR,
+        infra_ir: InfraIR,
+    ):
+        """Connect services to infrastructure (compute and network)."""
+        if not service_ir or not infra_ir:
+            return
+
+        # Get first compute node (primary runtime)
+        if infra_ir.compute:
+            primary_compute = sorted(infra_ir.compute, key=lambda c: c.name)[0]
+            compute_node = f"infra_compute_{mermaid_id(primary_compute.name)}"
+
+            for service in service_ir.services:
+                svc_node = f"svc_{mermaid_id(service.name)}"
+                self._add_edge(svc_node, compute_node, "runs on")
+
+        # Connect edge services to network
+        if infra_ir.network:
+            primary_network = sorted(infra_ir.network, key=lambda n: n.name)[0]
+            network_node = f"infra_net_{mermaid_id(primary_network.name)}"
+
+            for service in service_ir.services:
+                if service.service_type == "edge" or service.protocol in ("http", "https", "grpc"):
+                    svc_node = f"svc_{mermaid_id(service.name)}"
+                    self._add_edge(svc_node, network_node, "exposed via")
+
     # ---------- output ----------
 
     def render(self) -> str:
@@ -225,5 +288,13 @@ def compile_diagram(context: PipelineContext) -> str:
 
     if context.infra_ir:
         diagram.add_infra(context.infra_ir)
+
+    # Add business -> service wiring (user journey to entry points)
+    if context.business_ir and context.service_ir:
+        diagram.add_business_to_service_edges(context.business_ir, context.service_ir)
+
+    # Add service -> infrastructure wiring
+    if context.service_ir and context.infra_ir:
+        diagram.add_service_to_infra_edges(context.service_ir, context.infra_ir)
 
     return diagram.render()
