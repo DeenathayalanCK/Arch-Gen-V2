@@ -129,6 +129,40 @@ class MermaidDiagram:
                 label=f"Data: {store.name}",
             )
 
+    # ---------- data access edges ----------
+
+    def add_data_access_edges(
+        self,
+        data_ir: DataIR,
+        service_ir: ServiceIR,
+    ):
+        """Render service -> datastore edges based on access_patterns."""
+        if not data_ir or not service_ir:
+            return
+
+        # Build lookup: datastore_id (UUID) -> canonical datastore name
+        datastore_id_to_name = {ds.id: ds.name for ds in data_ir.datastores}
+
+        # Build lookup: service_name -> service exists
+        service_names = {svc.name for svc in service_ir.services}
+
+        for access in data_ir.access_patterns:
+            # access.service_id is the service NAME (not UUID)
+            service_name = access.service_id
+            if service_name not in service_names:
+                continue
+
+            # access.datastore_id is the datastore UUID
+            datastore_name = datastore_id_to_name.get(access.datastore_id)
+            if not datastore_name:
+                continue
+
+            # Generate mermaid-safe IDs
+            svc_node = f"svc_{mermaid_id(service_name)}"
+            data_node = f"data_{mermaid_id(datastore_name)}"
+
+            self._add_edge(svc_node, data_node, access.access_type)
+
     # ---------- infra ----------
 
     def add_infra(self, ir: InfraIR):
@@ -184,6 +218,10 @@ def compile_diagram(context: PipelineContext) -> str:
 
     if context.data_ir:
         diagram.add_data(context.data_ir)
+
+    # Add edges between services and datastores
+    if context.data_ir and context.service_ir:
+        diagram.add_data_access_edges(context.data_ir, context.service_ir)
 
     if context.infra_ir:
         diagram.add_infra(context.infra_ir)
