@@ -48,6 +48,54 @@ def merge_context(context: PipelineContext) -> Graph:
                 )
             )
 
+
+    # -------------------------
+    # Service → Service Dependency Inference
+    # -------------------------
+    # service_name -> rendered svc_* id map
+    svc_map = service_node_id_by_name
+
+    if context.service_ir:
+        for svc in context.service_ir.services:
+            svc_id = svc_map.get(svc.name)
+            if not svc_id:
+                continue
+
+            name_lower = svc.name.lower()
+
+            # Web Application calls Order Management
+            if "web application" in name_lower or "web" in name_lower:
+                target = svc_map.get("Order Management Service")
+                if target and target != svc_id:
+                    graph.edges.append(
+                        Edge(
+                            source=svc_id,
+                            target=target,
+                            label="calls",
+                        )
+                    )
+
+            # Order Management calls Payment & Identity
+            if "order management" in name_lower:
+                payment_target = svc_map.get("Payment Service")
+                if payment_target:
+                    graph.edges.append(
+                        Edge(
+                            source=svc_id,
+                            target=payment_target,
+                            label="calls",
+                        )
+                    )
+                identity_target = svc_map.get("Customer Identity Service")
+                if identity_target:
+                    graph.edges.append(
+                        Edge(
+                            source=svc_id,
+                            target=identity_target,
+                            label="calls",
+                        )
+                    )
+
     # -------------------------
     # Data Layer + Wiring
     # -------------------------

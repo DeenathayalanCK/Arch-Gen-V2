@@ -7,6 +7,7 @@ from app.pipeline.infra_stage import InfraStage
 from app.pipeline.decomposition_stage import DecompositionStage
 from app.pipeline.reference_injection_stage import ReferenceInjectionStage
 from app.pipeline.service_inference_stage import ServiceInferenceStage
+from app.pipeline.service_dependency_stage import ServiceDependencyStage
 class PipelineController:
     MAX_RETRIES = 2
 
@@ -18,6 +19,7 @@ class PipelineController:
             #ServiceStage(),
             ResponsibilityExpansionStage(),
             DataStage(),
+            ServiceDependencyStage(),
             InfraStage(),
             ReferenceInjectionStage(),      
             

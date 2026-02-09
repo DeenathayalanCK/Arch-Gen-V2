@@ -8,6 +8,7 @@ from app.ir.data_ir import DataIR
 from app.ir.infra_ir import InfraIR
 from app.ir.responsibility_ir import ServiceResponsibilities
 
+
 # ============================================================
 # Mermaid ID helper (CRITICAL FIX)
 # ============================================================
@@ -15,10 +16,7 @@ from app.ir.responsibility_ir import ServiceResponsibilities
 def mermaid_id(text: str) -> str:
     """
     Convert any human-readable string into a Mermaid-safe ID.
-    Rules:
-    - No spaces
-    - No special characters
-    - Deterministic
+    Deterministic and collision-safe.
     """
     return re.sub(r"[^a-zA-Z0-9_]", "_", text)
 
@@ -30,13 +28,13 @@ def mermaid_id(text: str) -> str:
 class MermaidDiagram:
     """
     Deterministic Mermaid diagram builder.
-    No LLM usage.
-    Same IR => same output.
+    No inference. No LLM usage.
     """
 
     def __init__(self):
         self.lines: List[str] = ["flowchart TD"]
         self._nodes: set[str] = set()
+        self._edges: set[tuple[str, str, Optional[str]]] = set()
 
     # ---------- helpers ----------
 
@@ -46,6 +44,11 @@ class MermaidDiagram:
             self._nodes.add(node_id)
 
     def _add_edge(self, src: str, dst: str, label: Optional[str] = None):
+        edge_key = (src, dst, label)
+        if edge_key in self._edges:
+            return
+        self._edges.add(edge_key)
+
         if label:
             self.lines.append(f"  {src} -->|{label}| {dst}")
         else:
@@ -56,36 +59,23 @@ class MermaidDiagram:
     def add_business(self, ir: BusinessIR):
         self.lines.append("  %% Business Layer")
 
-        # Actors (sorted for determinism)
-        actors = sorted(ir.actors, key=lambda a: a.name)
-        for actor in actors:
-            actor_id = mermaid_id(actor.name)
-            self._add_node(
-                node_id=f"actor_{actor_id}",
-                label=f"Actor: {actor.name}",
-            )
+        for actor in sorted(ir.actors, key=lambda a: a.name):
+            actor_id = f"actor_{mermaid_id(actor.name)}"
+            self._add_node(actor_id, f"Actor: {actor.name}")
 
-        # Flows and steps
-        flows = sorted(ir.flows, key=lambda f: f.name)
-        for flow in flows:
-            prev_step_node = None
-
-            steps = sorted(flow.steps, key=lambda s: s.order)
-            for step in steps:
+        for flow in sorted(ir.flows, key=lambda f: f.name):
+            prev_step = None
+            for step in sorted(flow.steps, key=lambda s: s.order):
                 step_node = f"biz_step_{mermaid_id(step.id)}"
-
-                self._add_node(
-                    node_id=step_node,
-                    label=step.name,
-                )
+                self._add_node(step_node, step.name)
 
                 actor_node = f"actor_{mermaid_id(step.actor_id)}"
                 self._add_edge(actor_node, step_node)
 
-                if prev_step_node:
-                    self._add_edge(prev_step_node, step_node)
+                if prev_step:
+                    self._add_edge(prev_step, step_node)
 
-                prev_step_node = step_node
+                prev_step = step_node
 
     # ---------- services ----------
 
@@ -97,22 +87,18 @@ class MermaidDiagram:
         self.lines.append("  %% Service Layer")
 
         for service in sorted(service_ir.services, key=lambda s: s.name):
-            svc_safe = mermaid_id(service.name)
-            subgraph_id = f"svc_{svc_safe}"
+            svc_id = f"svc_{mermaid_id(service.name)}"
 
-            self.lines.append(
-                f'  subgraph {subgraph_id}["Service: {service.name}"]'
-            )
+            # 🔒 Explicit service node
+            self._add_node(svc_id, f"Service: {service.name}")
+
+            self.lines.append(f"  subgraph {svc_id}")
 
             resp_bundle = responsibility_map.get(service.id)
-
             if resp_bundle:
-                for resp in resp_bundle.responsibilities:
-                    resp_id = f"{subgraph_id}_{mermaid_id(resp.name)}"
-                    self._add_node(
-                        resp_id,
-                        resp.name,
-                    )
+                for resp in sorted(resp_bundle.responsibilities, key=lambda r: r.name):
+                    resp_id = f"{svc_id}_{mermaid_id(resp.name)}"
+                    self._add_node(resp_id, resp.name)
 
             self.lines.append("  end")
 
@@ -121,44 +107,27 @@ class MermaidDiagram:
     def add_data(self, ir: DataIR):
         self.lines.append("  %% Data Layer")
 
-        datastores = sorted(ir.datastores, key=lambda d: d.name)
-        for store in datastores:
-            store_id = mermaid_id(store.name)
+        for store in sorted(ir.datastores, key=lambda d: d.name):
             self._add_node(
-                node_id=f"data_{store_id}",
-                label=f"Data: {store.name}",
+                f"data_{mermaid_id(store.name)}",
+                f"Data: {store.name}",
             )
 
     # ---------- data access edges ----------
 
-    def add_data_access_edges(
-        self,
-        data_ir: DataIR,
-        service_ir: ServiceIR,
-    ):
-        """Render service -> datastore edges based on access_patterns."""
-        if not data_ir or not service_ir:
-            return
-
-        # Build lookup: datastore_id (UUID) -> canonical datastore name
-        datastore_id_to_name = {ds.id: ds.name for ds in data_ir.datastores}
-
-        # Build lookup: service_name -> service exists
+    def add_data_access_edges(self, data_ir: DataIR, service_ir: ServiceIR):
+        datastore_lookup = {ds.id: ds.name for ds in data_ir.datastores}
         service_names = {svc.name for svc in service_ir.services}
 
         for access in data_ir.access_patterns:
-            # access.service_id is the service NAME (not UUID)
-            service_name = access.service_id
-            if service_name not in service_names:
+            if access.service_id not in service_names:
                 continue
 
-            # access.datastore_id is the datastore UUID
-            datastore_name = datastore_id_to_name.get(access.datastore_id)
+            datastore_name = datastore_lookup.get(access.datastore_id)
             if not datastore_name:
                 continue
 
-            # Generate mermaid-safe IDs
-            svc_node = f"svc_{mermaid_id(service_name)}"
+            svc_node = f"svc_{mermaid_id(access.service_id)}"
             data_node = f"data_{mermaid_id(datastore_name)}"
 
             self._add_edge(svc_node, data_node, access.access_type)
@@ -168,84 +137,90 @@ class MermaidDiagram:
     def add_infra(self, ir: InfraIR):
         self.lines.append("  %% Infrastructure Layer")
 
-        compute_nodes = sorted(ir.compute, key=lambda c: c.name)
-        for node in compute_nodes:
-            node_id = mermaid_id(node.name)
+        for compute in sorted(ir.compute, key=lambda c: c.name):
             self._add_node(
-                node_id=f"infra_compute_{node_id}",
-                label=f"Compute: {node.name}",
+                f"infra_compute_{mermaid_id(compute.name)}",
+                f"Compute: {compute.name}",
             )
 
-        network_nodes = sorted(ir.network, key=lambda n: n.name)
-        for net in network_nodes:
-            net_id = mermaid_id(net.name)
+        for network in sorted(ir.network, key=lambda n: n.name):
             self._add_node(
-                node_id=f"infra_net_{net_id}",
-                label=f"Network: {net.name}",
+                f"infra_net_{mermaid_id(network.name)}",
+                f"Network: {network.name}",
             )
 
-    # ---------- business to service edges ----------
+    # ---------- business to service ----------
 
-    def add_business_to_service_edges(
-        self,
-        business_ir: BusinessIR,
-        service_ir: ServiceIR,
-    ):
-        """Connect business steps to edge services (entry points like Web Application)."""
-        if not business_ir or not service_ir:
-            return
-
-        # Find edge services (entry points for user interaction)
+    def add_business_to_service_edges(self, business_ir: BusinessIR, service_ir: ServiceIR):
         edge_services = [
             svc for svc in service_ir.services
-            if svc.service_type == "edge" or "web" in svc.name.lower() or "api" in svc.name.lower()
+            if svc.service_type == "edge"
+            or svc.protocol in ("http", "https", "grpc")
         ]
 
-        if not edge_services:
-            return
-
-        # Connect last business step to edge services
         for flow in business_ir.flows:
             if not flow.steps:
                 continue
 
-            # Get the last step in the flow (or first if only one)
             last_step = sorted(flow.steps, key=lambda s: s.order)[-1]
             step_node = f"biz_step_{mermaid_id(last_step.id)}"
 
-            for edge_svc in edge_services:
-                svc_node = f"svc_{mermaid_id(edge_svc.name)}"
-                self._add_edge(step_node, svc_node, "uses")
+            for svc in edge_services:
+                self._add_edge(
+                    step_node,
+                    f"svc_{mermaid_id(svc.name)}",
+                    "uses",
+                )
 
-    # ---------- service to infra edges ----------
-
-    def add_service_to_infra_edges(
-        self,
-        service_ir: ServiceIR,
-        infra_ir: InfraIR,
-    ):
-        """Connect services to infrastructure (compute and network)."""
-        if not service_ir or not infra_ir:
+    # ---------- service to service ----------
+    def add_service_dependencies(self, service_ir: ServiceIR):
+        if not service_ir.dependencies:
             return
 
-        # Get first compute node (primary runtime)
+        # Build UUID → name map
+        service_id_to_name = {
+            svc.id: svc.name for svc in service_ir.services
+        }
+
+        for dep in service_ir.dependencies:
+            from_name = service_id_to_name.get(dep.from_service_id)
+            to_name = service_id_to_name.get(dep.to_service_id)
+
+            if not from_name or not to_name:
+                continue  # safety
+
+            src = f"svc_{mermaid_id(from_name)}"
+            dst = f"svc_{mermaid_id(to_name)}"
+
+            self._add_edge(src, dst, dep.interaction)
+
+
+
+    # ---------- service to infra ----------
+
+    def add_service_to_infra_edges(self, service_ir: ServiceIR, infra_ir: InfraIR):
         if infra_ir.compute:
-            primary_compute = sorted(infra_ir.compute, key=lambda c: c.name)[0]
-            compute_node = f"infra_compute_{mermaid_id(primary_compute.name)}"
+            compute = sorted(infra_ir.compute, key=lambda c: c.name)[0]
+            compute_node = f"infra_compute_{mermaid_id(compute.name)}"
 
-            for service in service_ir.services:
-                svc_node = f"svc_{mermaid_id(service.name)}"
-                self._add_edge(svc_node, compute_node, "runs on")
+            for svc in service_ir.services:
+                self._add_edge(
+                    f"svc_{mermaid_id(svc.name)}",
+                    compute_node,
+                    "runs on",
+                )
 
-        # Connect edge services to network
         if infra_ir.network:
-            primary_network = sorted(infra_ir.network, key=lambda n: n.name)[0]
-            network_node = f"infra_net_{mermaid_id(primary_network.name)}"
+            network = sorted(infra_ir.network, key=lambda n: n.name)[0]
+            network_node = f"infra_net_{mermaid_id(network.name)}"
 
-            for service in service_ir.services:
-                if service.service_type == "edge" or service.protocol in ("http", "https", "grpc"):
-                    svc_node = f"svc_{mermaid_id(service.name)}"
-                    self._add_edge(svc_node, network_node, "exposed via")
+            for svc in service_ir.services:
+                if svc.service_type == "edge":
+                    self._add_edge(
+                        f"svc_{mermaid_id(svc.name)}",
+                        network_node,
+                        "exposed via",
+                    )
 
     # ---------- output ----------
 
@@ -258,16 +233,6 @@ class MermaidDiagram:
 # ============================================================
 
 def compile_diagram(context: PipelineContext) -> str:
-    """
-    Canonical deterministic compiler.
-
-    RULES:
-    - Rendering order is fixed
-    - Sorting is enforced
-    - No inference
-    - No side effects
-    """
-
     diagram = MermaidDiagram()
 
     if context.business_ir:
@@ -282,19 +247,26 @@ def compile_diagram(context: PipelineContext) -> str:
     if context.data_ir:
         diagram.add_data(context.data_ir)
 
-    # Add edges between services and datastores
     if context.data_ir and context.service_ir:
         diagram.add_data_access_edges(context.data_ir, context.service_ir)
 
     if context.infra_ir:
         diagram.add_infra(context.infra_ir)
 
-    # Add business -> service wiring (user journey to entry points)
     if context.business_ir and context.service_ir:
-        diagram.add_business_to_service_edges(context.business_ir, context.service_ir)
+        diagram.add_business_to_service_edges(
+            context.business_ir,
+            context.service_ir,
+        )
 
-    # Add service -> infrastructure wiring
     if context.service_ir and context.infra_ir:
-        diagram.add_service_to_infra_edges(context.service_ir, context.infra_ir)
+        diagram.add_service_to_infra_edges(
+            context.service_ir,
+            context.infra_ir,
+        )
+
+    if context.service_ir:
+        diagram.add_service_dependencies(context.service_ir)
+
 
     return diagram.render()
