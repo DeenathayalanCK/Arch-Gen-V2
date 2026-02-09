@@ -2,7 +2,7 @@ from app.pipeline.stage import PipelineStage
 from app.ir.validation import ValidationResult
 from app.reference.resolver import resolve_reference_architecture
 from app.ir.responsibility_ir import Responsibility, ServiceResponsibilities
-from app.ir.data_ir import DataStore
+from app.ir.data_ir import DataStore, canonical_datastore_name
 
 
 class ReferenceInjectionStage(PipelineStage):
@@ -41,7 +41,8 @@ class ReferenceInjectionStage(PipelineStage):
             if context.data_ir:
                 existing = {d.name for d in context.data_ir.datastores}
                 for d in ref.get("datastores", []):
-                    if d["name"] not in existing:
+                    canonical = canonical_datastore_name(d["name"])
+                    if canonical and canonical not in existing:
                         context.data_ir.datastores.append(
                             DataStore(
                                 name=d["name"],
