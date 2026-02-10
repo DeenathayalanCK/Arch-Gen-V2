@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 from app.ir.business_ir import BusinessIR
 from app.ir.service_ir import ServiceIR
@@ -22,6 +22,9 @@ class PipelineContext:
     responsibility_map: Dict[str, ServiceResponsibilities] = field(default_factory=dict)
     data_ir: Optional[DataIR] = None
     infra_ir: Optional[InfraIR] = None
+
+    # Visual IR (generated after responsibility stage)
+    visual_ir: Optional[Any] = None  # VisualDiagram, imported lazily to avoid circular deps
 
     # Inferred dependencies
     responsibility_dependencies: List[ResponsibilityDependency] = field(default_factory=list)

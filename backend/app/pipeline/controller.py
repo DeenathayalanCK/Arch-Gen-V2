@@ -12,6 +12,7 @@ from app.pipeline.responsibility_dependency_stage import ResponsibilityDependenc
 from app.pipeline.responsibility_dependency_inference_stage import (
     ResponsibilityDependencyInferenceStage,
 )
+from app.visual.visual_mapper import map_context_to_visual_ir
 
 
 class PipelineController:
@@ -54,5 +55,14 @@ class PipelineController:
                 if result:
                     context.errors.extend(result.errors)
                 break  # hard stop on failure
+
+        # --------------------------------
+        # Visual IR (AFTER all stages)
+        # --------------------------------
+        try:
+            context.visual_ir = map_context_to_visual_ir(context)
+        except Exception as e:
+            print("[WARN] Visual IR generation failed:", e)
+            context.visual_ir = None
 
         return context
