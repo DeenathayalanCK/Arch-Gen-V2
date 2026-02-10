@@ -194,6 +194,32 @@ class MermaidDiagram:
 
             self._add_edge(src, dst, dep.interaction)
 
+    # ---------- responsibility dependencies ----------
+    def add_responsibility_dependency_edges(self, deps):
+        if not deps:
+            return
+
+        self.lines.append("  %% Responsibility Dependencies")
+
+        for dep in deps:
+            from_node = f"svc_{mermaid_id(dep.from_service)}_{mermaid_id(dep.from_responsibility)}"
+            to_node = f"svc_{mermaid_id(dep.to_service)}_{mermaid_id(dep.to_responsibility)}"
+
+            self._add_edge(from_node, to_node, dep.interaction)
+
+    # ---------- responsibility data access ----------
+    def add_responsibility_data_access_edges(self, access_list):
+        """Render responsibility → datastore edges."""
+        if not access_list:
+            return
+
+        self.lines.append("  %% Responsibility Data Access")
+
+        for access in access_list:
+            resp_node = f"svc_{mermaid_id(access.service_name)}_{mermaid_id(access.responsibility_name)}"
+            data_node = f"data_{mermaid_id(access.datastore_name)}"
+
+            self._add_edge(resp_node, data_node, access.access_type)
 
 
     # ---------- service to infra ----------
@@ -259,14 +285,26 @@ def compile_diagram(context: PipelineContext) -> str:
             context.service_ir,
         )
 
+    # 🔑 Service → Service FIRST
+    if context.service_ir:
+        diagram.add_service_dependencies(context.service_ir)
+
+    # 🔑 Responsibility → Responsibility AFTER services exist
+    if context.responsibility_dependencies:
+        diagram.add_responsibility_dependency_edges(
+            context.responsibility_dependencies
+        )
+
+    # 🔑 Responsibility → Data access
+    if context.responsibility_data_access:
+        diagram.add_responsibility_data_access_edges(
+            context.responsibility_data_access
+        )
+
     if context.service_ir and context.infra_ir:
         diagram.add_service_to_infra_edges(
             context.service_ir,
             context.infra_ir,
         )
-
-    if context.service_ir:
-        diagram.add_service_dependencies(context.service_ir)
-
 
     return diagram.render()

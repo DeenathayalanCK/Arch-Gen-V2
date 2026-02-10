@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from app.ir.business_ir import BusinessIR
 from app.ir.service_ir import ServiceIR
 from app.ir.data_ir import DataIR
 from app.ir.infra_ir import InfraIR
 from app.ir.decomposition_ir import DecomposedRequirements
-from app.ir.responsibility_ir import ServiceResponsibilities
+from app.ir.responsibility_ir import ServiceResponsibilities, ResponsibilityDependency, ResponsibilityDataAccess
 
 @dataclass
 class PipelineContext:
@@ -22,6 +22,10 @@ class PipelineContext:
     responsibility_map: Dict[str, ServiceResponsibilities] = field(default_factory=dict)
     data_ir: Optional[DataIR] = None
     infra_ir: Optional[InfraIR] = None
+
+    # Inferred dependencies
+    responsibility_dependencies: List[ResponsibilityDependency] = field(default_factory=list)
+    responsibility_data_access: List[ResponsibilityDataAccess] = field(default_factory=list)
 
     errors: list[str] = field(default_factory=list)
 
