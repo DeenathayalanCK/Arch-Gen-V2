@@ -41,6 +41,11 @@ class ResponsibilityDependencyInferenceStage(PipelineStage):
 
         inferred: list[ResponsibilityDependency] = []
 
+        # 🔑 FIX: Build service_id -> service_name map (compiler expects names, not IDs)
+        service_id_to_name: dict[str, str] = {
+            svc.id: svc.name for svc in context.service_ir.services
+        }
+
         # service_id -> list[Responsibility]
         responsibilities_by_service: dict[str, list] = {}
 
@@ -54,6 +59,13 @@ class ResponsibilityDependencyInferenceStage(PipelineStage):
         for dep in context.service_ir.dependencies:
             from_service_id = dep.from_service_id
             to_service_id = dep.to_service_id
+
+            # 🔑 FIX: Translate IDs to names for Mermaid node matching
+            from_service_name = service_id_to_name.get(from_service_id)
+            to_service_name = service_id_to_name.get(to_service_id)
+
+            if not from_service_name or not to_service_name:
+                continue
 
             from_resps = responsibilities_by_service.get(from_service_id, [])
             to_resps = responsibilities_by_service.get(to_service_id, [])
@@ -77,9 +89,9 @@ class ResponsibilityDependencyInferenceStage(PipelineStage):
 
                     inferred.append(
                         ResponsibilityDependency(
-                            from_service=from_service_id,
+                            from_service=from_service_name,
                             from_responsibility=fr.name,
-                            to_service=to_service_id,
+                            to_service=to_service_name,
                             to_responsibility=tr.name,
                             interaction=dep.interaction or "calls",
                         )
