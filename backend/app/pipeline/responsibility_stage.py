@@ -11,6 +11,13 @@ FORBIDDEN_TERMS = {
     "backend", "lambda", "s3", "redis"
 }
 
+ALLOWED_RESPONSIBILITY_TYPES = {
+    "logic",
+    "orchestration",
+    "integration",
+    "persistence",
+}
+
 
 class ResponsibilityExpansionStage(PipelineStage):
     name = "responsibility_expansion"
@@ -19,19 +26,23 @@ class ResponsibilityExpansionStage(PipelineStage):
         self.client = LLMClient()
 
     def run(self, context):
-        if not context.service_ir:
+        # --------------------------------
+        # Guard: nothing to expand
+        # --------------------------------
+        if not context.service_ir or not context.service_ir.services:
             return ValidationResult.success()
 
         if not hasattr(context, "responsibility_map") or context.responsibility_map is None:
             context.responsibility_map = {}
 
+        # --------------------------------
+        # Expand responsibilities per service
+        # --------------------------------
         for service in context.service_ir.services:
             responsibilities = self._expand_with_llm(service.name, context)
 
-            # Fallback if LLM output is unsafe
             if not responsibilities:
                 responsibilities = self._fallback(service.name)
-
                 source = "rule"
             else:
                 source = "llm"
@@ -42,6 +53,7 @@ class ResponsibilityExpansionStage(PipelineStage):
                 responsibilities=responsibilities,
                 source=source,
             )
+
 
         return ValidationResult.success()
 
@@ -101,24 +113,35 @@ Return JSON ONLY in this format:
             if not isinstance(item, dict):
                 return None
 
-            name = item.get("name", "").strip()
+            name = str(item.get("name", "")).strip()
             if not name or len(name.split()) > 5:
                 return None
 
-            lower = name.lower()
-            if any(term in lower for term in FORBIDDEN_TERMS):
-                return None
+            lower_name = name.lower()
 
-            if lower in seen:
+            # Word-level forbidden term check (safe)
+            for term in FORBIDDEN_TERMS:
+                if f" {term} " in f" {lower_name} ":
+                    return None
+
+            if lower_name in seen:
                 continue
 
-            seen.add(lower)
+            seen.add(lower_name)
+
+            resp_type = str(item.get("type", "logic")).lower()
+            if resp_type not in ALLOWED_RESPONSIBILITY_TYPES:
+                resp_type = "logic"
+
+            description = item.get("description")
+            if not description:
+                description = f"Handles {name.lower()} responsibilities"
 
             responsibilities.append(
                 Responsibility(
                     name=name,
-                    description=item.get("description"),
-                    responsibility_type=item.get("type", "logic"),
+                    description=description,
+                    responsibility_type=resp_type,
                 )
             )
 
@@ -126,7 +149,6 @@ Return JSON ONLY in this format:
             return None
 
         return responsibilities
-
 
     # ------------------------
     # Rule-Based Fallback
@@ -136,10 +158,26 @@ Return JSON ONLY in this format:
         base = service_name.replace("Service", "").strip()
 
         return [
-            Responsibility(name=f"{base} validation"),
-            Responsibility(name=f"{base} processing"),
-            Responsibility(name=f"{base} lifecycle management"),
-            Responsibility(name=f"{base} retrieval"),
+            Responsibility(
+                name=f"{base} validation",
+                description=f"Validates {base.lower()} related inputs and rules",
+                responsibility_type="logic",
+            ),
+            Responsibility(
+                name=f"{base} processing",
+                description=f"Processes core {base.lower()} business logic",
+                responsibility_type="logic",
+            ),
+            Responsibility(
+                name=f"{base} lifecycle management",
+                description=f"Manages {base.lower()} state transitions",
+                responsibility_type="orchestration",
+            ),
+            Responsibility(
+                name=f"{base} retrieval",
+                description=f"Retrieves {base.lower()} information",
+                responsibility_type="persistence",
+            ),
         ]
 
     def _infer_service_role(self, service_name: str) -> str:
