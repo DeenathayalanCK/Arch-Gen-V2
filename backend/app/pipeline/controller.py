@@ -12,6 +12,7 @@ from app.pipeline.responsibility_dependency_stage import ResponsibilityDependenc
 from app.pipeline.responsibility_dependency_inference_stage import (
     ResponsibilityDependencyInferenceStage,
 )
+from app.pipeline.system_context_stage import SystemContextStage
 from app.visual.visual_mapper import map_context_to_visual_ir
 
 
@@ -19,7 +20,8 @@ class PipelineController:
     MAX_RETRIES = 2
 
     def __init__(self):
-        self.stages = [
+        # Core stages (always run)
+        self.core_stages = [
             DecompositionStage(),
             BusinessStage(),
             ServiceInferenceStage(),
@@ -30,13 +32,27 @@ class PipelineController:
             ResponsibilityDependencyInferenceStage(),
             InfraStage(),
             ReferenceInjectionStage(),      
-            
         ]
+        
+        # Optional stages
+        self.system_context_stage = SystemContextStage()
 
-    def run(self, requirements_text: str) -> PipelineContext:
+    def run(
+        self, 
+        requirements_text: str,
+        include_system_context: bool = False,
+    ) -> PipelineContext:
         context = PipelineContext(requirements_text=requirements_text)
 
-        for stage in self.stages:
+        # Determine which stages to run
+        stages = list(self.core_stages)
+        
+        # Insert system context stage early if requested
+        if include_system_context:
+            # Run after decomposition but before business stage
+            stages.insert(1, self.system_context_stage)
+
+        for stage in stages:
             result = None
 
             for attempt in range(self.MAX_RETRIES + 1):

@@ -1,0 +1,107 @@
+.diagram-display {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.diagram-tabs {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f5f5f5;
+}
+
+.tab-button {
+  padding: 12px 24px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.tab-button:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.tab-button.active {
+  color: #1976d2;
+  border-bottom: 2px solid #1976d2;
+  background-color: white;
+}
+
+.tab-button:disabled {
+  color: #bdbdbd;
+  cursor: not-allowed;
+}
+
+.diagram-content {
+  padding: 16px;
+  min-height: 200px;
+}
+
+.diagram-panel .diagram-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.diagram-panel h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.copy-button {
+  padding: 6px 12px;
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.copy-button:hover {
+  background: #1565c0;
+}
+
+.diagram-code {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: "Fira Code", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.diagram-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #666;
+}
+
+.diagram-hint a {
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.diagram-hint a:hover {
+  text-decoration: underline;
+}
+
+.diagram-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  color: #999;
+}

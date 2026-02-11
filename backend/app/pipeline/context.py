@@ -23,6 +23,9 @@ class PipelineContext:
     data_ir: Optional[DataIR] = None
     infra_ir: Optional[InfraIR] = None
 
+    # C4 Level 1: System Context IR
+    system_context_ir: Optional[Any] = None  # SystemContextIR from system_context_stage
+
     # Visual IR (generated after responsibility stage)
     visual_ir: Optional[Any] = None  # VisualDiagram, imported lazily to avoid circular deps
 
@@ -30,10 +33,14 @@ class PipelineContext:
     responsibility_dependencies: List[ResponsibilityDependency] = field(default_factory=list)
     responsibility_data_access: List[ResponsibilityDataAccess] = field(default_factory=list)
 
+    # Applied patterns
+    applied_patterns: List[str] = field(default_factory=list)
+
     errors: list[str] = field(default_factory=list)
 
     @property
     def requirements(self) -> str:
         return self.requirements_text
+    
     def add_error(self, message: str):
         self.errors.append(message)
