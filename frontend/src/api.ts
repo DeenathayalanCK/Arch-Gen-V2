@@ -5,11 +5,41 @@ export interface PatternSuggestion {
   category: string;
 }
 
+export interface ValidationIssue {
+  severity: "error" | "warning" | "info";
+  code: string;
+  message: string;
+  node_id?: string;
+  edge_info?: string;
+  suggestion?: string;
+}
+
+export interface ValidationResult {
+  is_valid: boolean;
+  is_complete: boolean;
+  error_count: number;
+  warning_count: number;
+  info_count: number;
+  issues: ValidationIssue[];
+  stats: Record<string, number>;
+}
+
+export interface FixResult {
+  success: boolean;
+  fix_type: "auto" | "llm" | "fallback" | "none";
+  issues_fixed: string[];
+  issues_remaining: string[];
+  changes_made: string[];
+  llm_used: boolean;
+}
+
 export interface DiagramResponse {
   mermaid: string;
   d2: string;
   suggested_patterns?: string[];
   applied_patterns?: string[];
+  validation?: ValidationResult;
+  auto_fix?: FixResult;
 }
 
 export async function generateDiagram(
@@ -33,11 +63,22 @@ export async function generateDiagram(
     throw new Error(data.message || "Backend error");
   }
 
+  // Normalize auto_fix to ensure consistent structure
+  const autoFix = data.auto_fix || {
+    fix_type: "none",
+    success: true,
+    changes_made: [],
+    issues_fixed: [],
+    issues_remaining: [],
+  };
+
   return {
     mermaid: data.mermaid || "",
     d2: data.d2 || "",
     suggested_patterns: data.suggested_patterns || [],
     applied_patterns: data.applied_patterns || [],
+    validation: data.validation || null,
+    auto_fix: autoFix,
   };
 }
 

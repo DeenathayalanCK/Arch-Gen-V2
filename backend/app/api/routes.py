@@ -85,6 +85,8 @@ import asyncio
 from typing import AsyncGenerator
 from app.patterns import get_pattern_registry
 
+from app.validation import validate_diagram, validate_and_fix_diagram, FixResult
+
 router = APIRouter()
 
 
@@ -144,12 +146,9 @@ def generate_architecture(request: GenerateRequest):
         # 3️⃣ VISUAL IR VERIFICATION ✅
         # ============================
         if hasattr(context, "visual_ir") and context.visual_ir:
-            print("\n===== VISUAL IR OUTPUT =====")
-            print(json.dumps(
-                context.visual_ir,
-                default=lambda o: o.__dict__,
-                indent=2
-            ))
+            print("\n===== VISUAL IR OUTPUT (BEFORE FIX) =====")
+            print(f"Nodes: {len(context.visual_ir.nodes)}")
+            print(f"Edges: {len(context.visual_ir.edges)}")
             print("================================\n")
         else:
             print("\n[WARN] context.visual_ir NOT FOUND\n")
@@ -165,16 +164,79 @@ def generate_architecture(request: GenerateRequest):
         }
 
         # ============================
-        # 5️⃣ DIAGRAM COMPILATION - BOTH FORMATS
+        # 5️⃣ VALIDATE AND AUTO-FIX FIRST
+        # ============================
+        validation_result = None
+        fix_result = None
+        
+        if hasattr(context, "visual_ir") and context.visual_ir:
+            from app.validation import validate_diagram, validate_and_fix_diagram
+            
+            # Initial validation
+            initial_validation = validate_diagram(context.visual_ir)
+            
+            print("\n===== INITIAL DIAGRAM VALIDATION =====")
+            print(initial_validation.get_summary())
+            for issue in initial_validation.issues:
+                print(f"  - [{issue.code}] {issue.message}")
+            print("================================\n")
+            
+            # Auto-fix if invalid or incomplete
+            if not initial_validation.is_valid or not initial_validation.is_complete:
+                print("\n[AUTO-FIX] Diagram has issues, attempting auto-fix...")
+                
+                # Capture before state
+                nodes_before = len(context.visual_ir.nodes)
+                edges_before = len(context.visual_ir.edges)
+                
+                # Use hybrid fixer (auto + LLM)
+                fixed_diagram, final_validation, fix_result = validate_and_fix_diagram(
+                    context.visual_ir,
+                    use_llm=True,
+                )
+                
+                # CRITICAL: Always replace with fixed diagram
+                if fixed_diagram is not None:
+                    context.visual_ir = fixed_diagram
+                    validation_result = final_validation
+                    
+                    # Log what changed
+                    nodes_after = len(context.visual_ir.nodes)
+                    edges_after = len(context.visual_ir.edges)
+                    print(f"\n[AUTO-FIX] Nodes: {nodes_before} -> {nodes_after}")
+                    print(f"[AUTO-FIX] Edges: {edges_before} -> {edges_after}")
+                    print(f"[AUTO-FIX] Fix result: {fix_result.to_dict() if fix_result else 'None'}")
+                else:
+                    print("[AUTO-FIX] WARNING: fixed_diagram is None, using original")
+                    validation_result = initial_validation
+            else:
+                validation_result = initial_validation
+                print("[AUTO-FIX] Diagram is valid, no fix needed")
+            
+            print(f"\n===== FINAL VALIDATION =====")
+            print(validation_result.get_summary())
+            print("================================\n")
+
+        # ============================
+        # 6️⃣ DIAGRAM COMPILATION - AFTER FIXING
         # ============================
         mermaid_source = ""
         d2_source = ""
         
         if hasattr(context, "visual_ir") and context.visual_ir:
-            # Generate BOTH formats from visual IR
+            # Debug: Log the FINAL visual IR being rendered
+            print("\n===== RENDERING VISUAL IR (FINAL) =====")
+            print(f"Nodes: {len(context.visual_ir.nodes)}")
+            for n in context.visual_ir.nodes:
+                print(f"  - {n.id}: {n.label} (layer={n.layer}, type={n.node_type})")
+            print(f"Edges: {len(context.visual_ir.edges)}")
+            for e in context.visual_ir.edges:
+                print(f"  - {e.source} -> {e.target}")
+            print("==========================================\n")
+            
+            # Generate BOTH formats from the (potentially fixed) visual IR
             mermaid_source = render_mermaid_from_visual_ir(context.visual_ir)
             d2_source = render_d2_from_visual_ir(context.visual_ir)
-            print("\n===== MERMAID & D2 OUTPUT DONE =====")
         else:
             # Fallback to old compiler
             mermaid_source = compile_diagram(context)
@@ -186,14 +248,14 @@ def generate_architecture(request: GenerateRequest):
             d2_source = render_d2(graph)
 
         # ============================
-        # 6️⃣ SUGGEST PATTERNS
+        # 7️⃣ SUGGEST PATTERNS
         # ============================
         registry = get_pattern_registry()
         suggested = registry.suggest_patterns(request.requirements)
         suggested_ids = [p.id for p in suggested[:5]]  # Top 5
 
         # ============================
-        # 7️⃣ SYSTEM CONTEXT (C4 L1)
+        # 8️⃣ SYSTEM CONTEXT (C4 L1)
         # ============================
         system_context_payload = None
         if request.include_system_context and context.system_context_ir:
@@ -210,10 +272,15 @@ def generate_architecture(request: GenerateRequest):
                 "system_context": system_context_payload,
                 "suggested_patterns": suggested_ids,
                 "applied_patterns": applied_patterns,
+                "validation": validation_result.to_dict() if validation_result else None,
+                "auto_fix": fix_result.to_dict() if fix_result else {"fix_type": "none", "success": True, "changes_made": []},
             }
 
-        return {
-            "status": "success",
+        # ============================
+        # BUILD RESPONSE WITH FIX INFO
+        # ============================
+        response = {
+            "status": "success" if not context.errors else "warning",
             "mermaid": mermaid_source,
             "d2": d2_source,
             "diagram": {"type": "mermaid", "source": mermaid_source},
@@ -221,7 +288,14 @@ def generate_architecture(request: GenerateRequest):
             "system_context": system_context_payload,
             "suggested_patterns": suggested_ids,
             "applied_patterns": applied_patterns,
+            "validation": validation_result.to_dict() if validation_result else None,
+            "auto_fix": fix_result.to_dict() if fix_result else {"fix_type": "none", "success": True, "changes_made": []},
         }
+        
+        if context.errors:
+            response["warnings"] = context.errors
+        
+        return response
 
     except Exception as e:
         import traceback
@@ -517,4 +591,55 @@ Keep the response focused and practical.
             "status": "error",
             "message": str(e),
         }
+
+
+# ============================================================
+# VALIDATION ENDPOINT - With Auto-Fix Option
+# ============================================================
+
+@router.post("/validate")
+def validate_generated_diagram(request: GenerateRequest):
+    """
+    Generate and validate a diagram, with optional auto-fix.
+    """
+    try:
+        controller = PipelineController()
+        context = controller.run(
+            request.requirements,
+            include_system_context=request.include_system_context,
+        )
+        
+        if not hasattr(context, "visual_ir") or not context.visual_ir:
+            return {
+                "status": "error",
+                "message": "No visual IR generated",
+                "validation": None,
+            }
+        
+        # Validate and optionally fix
+        fixed_diagram, validation_result, fix_result = validate_and_fix_diagram(
+            context.visual_ir,
+            use_llm=True,
+        )
+        
+        errors = [i.to_dict() for i in validation_result.issues if i.severity.value == "error"]
+        warnings = [i.to_dict() for i in validation_result.issues if i.severity.value == "warning"]
+        info = [i.to_dict() for i in validation_result.issues if i.severity.value == "info"]
+        
+        return {
+            "status": "success" if validation_result.is_valid else "invalid",
+            "summary": validation_result.get_summary(),
+            "is_valid": validation_result.is_valid,
+            "is_complete": validation_result.is_complete,
+            "errors": errors,
+            "warnings": warnings,
+            "info": info,
+            "stats": validation_result.stats,
+            "auto_fix": fix_result.to_dict() if fix_result else None,
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
 
