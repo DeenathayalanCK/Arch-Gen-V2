@@ -18,6 +18,13 @@ class _IdMapper:
         return self._map[raw_id]
 
 
+def _truncate_label(label: str, max_len: int = 20) -> str:
+    """Truncate label for hub nodes to prevent oversized shapes."""
+    if len(label) <= max_len:
+        return label
+    return label[:max_len - 3] + "..."
+
+
 def render_mermaid_from_visual_ir(visual_ir):
     """
     Converts VisualDiagram → Mermaid flowchart.
@@ -107,18 +114,20 @@ def render_mermaid_from_visual_ir(visual_ir):
 
         # ---------------------------------------------------------
         # Hub-based rendering for bundled edges
-        # Creates: Source --> Hub((label)) --> Target1, Target2, ...
-        # This provides a single shared spine with fan-out stubs.
         # ---------------------------------------------------------
         if is_hub_bundle and is_bundle:
             hub_counter += 1
             hub_id = f"hub{hub_counter}"
 
-            # Create the hub node (small circle with bundle label).
+            # Create the hub node (small circle with TRUNCATED bundle label).
             hub_label = default_label if default_label else bundle_category.title()
+            # TRUNCATE for consistent sizing
+            hub_label = _truncate_label(hub_label, max_len=15)
             # Escape quotes in hub label.
             hub_label = hub_label.replace('"', "'")
-            lines.append(f'  {hub_id}(("{hub_label}"))')
+
+            # Use smaller diamond shape for hubs instead of large circle
+            lines.append(f'  {hub_id}{{{hub_label}}}')
             lines.append(f"  style {hub_id} fill:#E0E0E0,stroke:#666,stroke-width:1px")
 
             # Connect source to hub (the spine).
@@ -141,7 +150,6 @@ def render_mermaid_from_visual_ir(visual_ir):
                     continue
                 seen_pairs.add(pair)
 
-                # Fan-out stubs are unlabeled for cleanliness.
                 if edge.style == "dashed":
                     lines.append(f"  {hub_id} -.-> {tgt}")
                 elif edge.style == "dotted":
@@ -166,7 +174,6 @@ def render_mermaid_from_visual_ir(visual_ir):
                     continue
                 seen_pairs.add(pair)
 
-                # Use per-target label if available, else default.
                 if target_labels and target_id in target_labels:
                     use_label = target_labels[target_id]
                     use_label = re.sub(r'[|"#;]', "", use_label)

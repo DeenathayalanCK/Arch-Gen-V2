@@ -73,6 +73,13 @@ export default function App() {
       setMermaidDiagram(res.mermaid);
       setD2Diagram(res.d2);
       setAppliedPatterns(res.applied_patterns || []);
+      setValidationResult(res.validation || null);
+      setFixResult(res.auto_fix || null);
+
+      // Log for debugging
+      console.log("=== GENERATION RESULT ===");
+      console.log("Validation:", res.validation);
+      console.log("Auto-fix:", res.auto_fix);
 
       // Fetch pattern details for suggestions (only on first generate)
       if (
@@ -131,6 +138,9 @@ export default function App() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  const [validationResult, setValidationResult] = useState<any>(null);
+  const [fixResult, setFixResult] = useState<any>(null);
 
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
@@ -216,6 +226,90 @@ export default function App() {
           }}
         >
           <strong>✅ Applied Patterns:</strong> {appliedPatterns.join(", ")}
+        </div>
+      )}
+
+      {/* Validation & Fix Result Display */}
+      {(validationResult || fixResult) && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            background: validationResult?.is_valid ? "#e8f5e9" : "#fff3e0",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        >
+          <strong>🔍 Diagram Validation:</strong>
+          {validationResult && (
+            <div>
+              <span style={{ marginLeft: 8 }}>
+                {validationResult.is_valid ? "✅ Valid" : "⚠️ Has Issues"}
+              </span>
+              <span style={{ marginLeft: 8 }}>
+                Errors: {validationResult.error_count || 0}, Warnings:{" "}
+                {validationResult.warning_count || 0}
+              </span>
+              {validationResult.issues &&
+                validationResult.issues.length > 0 && (
+                  <ul
+                    style={{ margin: "4px 0", paddingLeft: 20, fontSize: 12 }}
+                  >
+                    {validationResult.issues
+                      .slice(0, 5)
+                      .map((issue: any, i: number) => (
+                        <li
+                          key={i}
+                          style={{
+                            color:
+                              issue.severity === "error"
+                                ? "#d32f2f"
+                                : "#f57c00",
+                          }}
+                        >
+                          [{issue.code}] {issue.message}
+                        </li>
+                      ))}
+                    {validationResult.issues.length > 5 && (
+                      <li>...and {validationResult.issues.length - 5} more</li>
+                    )}
+                  </ul>
+                )}
+            </div>
+          )}
+          {fixResult && fixResult.fix_type && fixResult.fix_type !== "none" && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: 8,
+                background: "#e3f2fd",
+                borderRadius: 4,
+              }}
+            >
+              <strong>🔧 Auto-Fix Applied:</strong>
+              <span style={{ marginLeft: 8 }}>
+                {fixResult.success ? "✅" : "⚠️"} {fixResult.fix_type} fix
+              </span>
+              <span style={{ marginLeft: 8 }}>
+                ({fixResult.issues_fixed?.length || 0} fixed,{" "}
+                {fixResult.issues_remaining?.length || 0} remaining)
+              </span>
+              {fixResult.llm_used && (
+                <span style={{ marginLeft: 8, fontStyle: "italic" }}>
+                  (LLM assisted)
+                </span>
+              )}
+              {fixResult.changes_made && fixResult.changes_made.length > 0 && (
+                <ul style={{ margin: "4px 0", paddingLeft: 20, fontSize: 12 }}>
+                  {fixResult.changes_made.map((change: string, i: number) => (
+                    <li key={i} style={{ color: "#1976d2" }}>
+                      ✓ {change}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
 
