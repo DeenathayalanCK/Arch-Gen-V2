@@ -1,17 +1,30 @@
 import { useState, useEffect, useRef } from "react";
 import mermaid from "mermaid";
 import domtoimage from "dom-to-image";
-import { generateDiagram } from "./api";
+import { generateDiagram, fetchPatternDetails, PatternSuggestion } from "./api";
+import { DiagramDisplay } from "./components/DiagramDisplay";
+import { PatternSelector } from "./components/PatternSelector";
+import "./components/DiagramDisplay.css";
+import "./components/PatternSelector.css";
 
 let renderCount = 0;
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
-  const [diagram, setDiagram] = useState("");
+  const [mermaidDiagram, setMermaidDiagram] = useState("");
+  const [d2Diagram, setD2Diagram] = useState("");
   const [loading, setLoading] = useState(false);
   const [detailLevel, setDetailLevel] = useState<"low" | "medium" | "high">(
     "high",
   );
+
+  // Pattern state
+  const [suggestedPatterns, setSuggestedPatterns] = useState<
+    PatternSuggestion[]
+  >([]);
+  const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
+  const [appliedPatterns, setAppliedPatterns] = useState<string[]>([]);
+  const [patternsLoading, setPatternsLoading] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -24,12 +37,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!diagram || !containerRef.current) return;
+    if (!mermaidDiagram || !containerRef.current) return;
 
     (async () => {
       try {
         const id = `diagram-${Date.now()}-${renderCount++}`;
-        const { svg } = await mermaid.render(id, diagram);
+        const { svg } = await mermaid.render(id, mermaidDiagram);
         containerRef.current!.innerHTML = svg;
         postProcessSvg(containerRef.current!);
       } catch (err) {
@@ -38,25 +51,40 @@ export default function App() {
           "<pre style='color:red'>Failed to render diagram</pre>";
       }
     })();
-  }, [diagram]);
+  }, [mermaidDiagram]);
 
   function postProcessSvg(container: HTMLDivElement) {
     const svg = container.querySelector("svg");
     if (!svg) return;
-
     svg.setAttribute("width", "100%");
     svg.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", "14");
     });
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(withPatterns: boolean = false) {
     if (!prompt.trim()) return;
 
     setLoading(true);
     try {
-      const res = await generateDiagram(prompt, detailLevel);
-      setDiagram(res.mermaid);
+      const patternsToApply = withPatterns ? selectedPatterns : [];
+      const res = await generateDiagram(prompt, detailLevel, patternsToApply);
+
+      setMermaidDiagram(res.mermaid);
+      setD2Diagram(res.d2);
+      setAppliedPatterns(res.applied_patterns || []);
+
+      // Fetch pattern details for suggestions (only on first generate)
+      if (
+        !withPatterns &&
+        res.suggested_patterns &&
+        res.suggested_patterns.length > 0
+      ) {
+        setPatternsLoading(true);
+        const details = await fetchPatternDetails(res.suggested_patterns);
+        setSuggestedPatterns(details);
+        setPatternsLoading(false);
+      }
     } catch (err) {
       console.error(err);
       alert("Diagram generation failed");
@@ -65,14 +93,20 @@ export default function App() {
     }
   }
 
+  function handlePatternToggle(patternId: string) {
+    setSelectedPatterns((prev) =>
+      prev.includes(patternId)
+        ? prev.filter((id) => id !== patternId)
+        : [...prev, patternId],
+    );
+  }
+
   function downloadSVG() {
     const svg = containerRef.current?.querySelector("svg");
     if (!svg) return;
-
     const blob = new Blob([svg.outerHTML], {
       type: "image/svg+xml;charset=utf-8",
     });
-
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -83,19 +117,13 @@ export default function App() {
 
   async function downloadPNG() {
     if (!containerRef.current) return;
-
     const scale = 2;
     const node = containerRef.current;
-
     const blob = await domtoimage.toBlob(node, {
       width: node.scrollWidth * scale,
       height: node.scrollHeight * scale,
-      style: {
-        transform: `scale(${scale})`,
-        transformOrigin: "top left",
-      },
+      style: { transform: `scale(${scale})`, transformOrigin: "top left" },
     });
-
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -129,24 +157,67 @@ export default function App() {
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <button onClick={handleGenerate} disabled={loading}>
+        <button onClick={() => handleGenerate(false)} disabled={loading}>
           {loading ? "Generating..." : "Generate Diagram"}
         </button>
+
+        {selectedPatterns.length > 0 && (
+          <button
+            onClick={() => handleGenerate(true)}
+            disabled={loading}
+            style={{
+              marginLeft: 10,
+              background: "#4caf50",
+              color: "white",
+              border: "none",
+              padding: "8px 16px",
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            {loading
+              ? "Applying..."
+              : `Apply ${selectedPatterns.length} Pattern(s)`}
+          </button>
+        )}
+
         <button
           onClick={downloadSVG}
-          disabled={!diagram}
+          disabled={!mermaidDiagram}
           style={{ marginLeft: 10 }}
         >
           Export SVG
         </button>
         <button
           onClick={downloadPNG}
-          disabled={!diagram}
+          disabled={!mermaidDiagram}
           style={{ marginLeft: 10 }}
         >
           Export PNG
         </button>
       </div>
+
+      {/* Pattern Selector */}
+      <PatternSelector
+        suggestedPatterns={suggestedPatterns}
+        selectedPatterns={selectedPatterns}
+        onPatternToggle={handlePatternToggle}
+        loading={patternsLoading}
+      />
+
+      {/* Applied Patterns Notice */}
+      {appliedPatterns.length > 0 && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            background: "#e8f5e9",
+            borderRadius: 6,
+          }}
+        >
+          <strong>✅ Applied Patterns:</strong> {appliedPatterns.join(", ")}
+        </div>
+      )}
 
       <div
         ref={containerRef}
@@ -158,6 +229,18 @@ export default function App() {
           background: "#fafafa",
         }}
       />
+
+      <div
+        style={{
+          marginTop: 24,
+          border: "1px solid #ccc",
+          padding: 16,
+          minHeight: 300,
+          background: "#fafafa",
+        }}
+      >
+        <DiagramDisplay mermaidDiagram={mermaidDiagram} d2Diagram={d2Diagram} />
+      </div>
     </div>
   );
 }

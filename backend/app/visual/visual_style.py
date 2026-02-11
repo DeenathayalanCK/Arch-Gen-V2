@@ -23,5 +23,31 @@ VISUAL_STYLE = {
         "shape": "rect",
         "color": "#BDBDBD",
         "layer": "infra"
+    },
+    # New pattern-related styles
+    "cache": {
+        "shape": "oval",
+        "color": "#E91E63",
+        "layer": "service"
+    },
+    "queue": {
+        "shape": "parallelogram",
+        "color": "#9C27B0",
+        "layer": "service"
+    },
+    "gateway": {
+        "shape": "hexagon",
+        "color": "#FF9800",
+        "layer": "application"
+    },
+    "external": {
+        "shape": "rect",
+        "color": "#9E9E9E",
+        "layer": "external"
+    },
+    "system_boundary": {
+        "shape": "rounded_rect",
+        "color": "#2196F3",
+        "layer": "context"
     }
 }
