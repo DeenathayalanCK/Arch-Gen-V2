@@ -33,7 +33,7 @@ class ServiceInferenceStage(PipelineStage):
             return any(k in text for k in keywords)
 
         # ------------------------------------------------
-        #  CORE DOMAIN SERVICES
+        #  CORE DOMAIN SERVICES (KEYWORD BASED)
         # ------------------------------------------------
 
         if has_any("order", "orders", "order management"):
@@ -76,10 +76,33 @@ class ServiceInferenceStage(PipelineStage):
             )
 
         # ------------------------------------------------
-        #  SAFETY NET (IMPORTANT)
+        #  DOMAIN BASELINE INJECTION (CONFIG-DRIVEN)
         # ------------------------------------------------
-        # If business exists but no services inferred,
-        # create a generic application service
+
+        domain_context = getattr(context, "domain_context", None)
+
+        if domain_context and domain_context.domain_rules:
+            baseline_services = domain_context.domain_rules.get("baseline_services", [])
+
+            for svc in baseline_services:
+                svc_id = svc.get("id")
+                if not svc_id:
+                    continue
+
+                inferred_services.setdefault(
+                    svc_id,
+                    Service(
+                        name=svc.get("name", svc_id.replace("_", " ").title()),
+                        service_type=svc.get("type", "logical"),
+                        protocol=svc.get("protocol", "internal"),
+                    )
+                )
+
+
+        # ------------------------------------------------
+        #  SAFETY NET
+        # ------------------------------------------------
+
         if context.business_ir and not inferred_services:
             inferred_services["app"] = Service(
                 name="Application Service",
@@ -90,6 +113,7 @@ class ServiceInferenceStage(PipelineStage):
         # ------------------------------------------------
         #  ASSIGN TO CONTEXT
         # ------------------------------------------------
+
         context.service_ir = ServiceIR(
             name="Services",
             services=list(inferred_services.values()),
@@ -97,3 +121,4 @@ class ServiceInferenceStage(PipelineStage):
         )
 
         return ValidationResult.success()
+

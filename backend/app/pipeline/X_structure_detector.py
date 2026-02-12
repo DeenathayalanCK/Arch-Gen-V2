@@ -1,3 +1,5 @@
+#backend\app\pipeline\structure_detector.py
+
 import re
 
 STRUCTURE_KEYWORDS = [

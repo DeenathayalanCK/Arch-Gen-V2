@@ -1,3 +1,5 @@
+#backend\app\pipeline\responsibility_stage.py
+
 from app.pipeline.stage import PipelineStage
 from app.ir.validation import ValidationResult
 from app.ir.responsibility_ir import ServiceResponsibilities, Responsibility
@@ -40,6 +42,8 @@ class ResponsibilityExpansionStage(PipelineStage):
         # --------------------------------
         for service in context.service_ir.services:
             responsibilities = self._expand_with_llm(service.name, context)
+            responsibilities = self._inject_domain_baseline(service.name, responsibilities, context)
+
 
             if not responsibilities:
                 responsibilities = self._fallback(service.name)
@@ -57,6 +61,39 @@ class ResponsibilityExpansionStage(PipelineStage):
 
         return ValidationResult.success()
 
+    def _inject_domain_baseline(self, service_name, responsibilities, context):
+        domain = self._get_domain(context)
+
+        if not responsibilities:
+            return responsibilities
+
+        existing_names = {r.name.lower() for r in responsibilities}
+
+        # Healthcare audit enforcement
+        if domain == "healthcare" and "audit" not in service_name.lower():
+            if "audit logging" not in existing_names:
+                responsibilities.append(
+                    Responsibility(
+                        name="Audit logging",
+                        description="Records domain events for compliance tracking",
+                        responsibility_type="integration",
+                    )
+                )
+
+        # Fintech fraud enforcement
+        if domain == "fintech" and "payment" in service_name.lower():
+            if "fraud validation" not in existing_names:
+                responsibilities.append(
+                    Responsibility(
+                        name="Fraud validation",
+                        description="Validates transactions against fraud rules",
+                        responsibility_type="logic",
+                    )
+                )
+
+        return responsibilities
+
+
     # ------------------------
     # LLM Expansion (Safe Zone)
     # ------------------------
@@ -72,6 +109,13 @@ for the given service.
 
 Service Role:
 {service_role}
+
+Domain:
+{self._get_domain(context)}
+
+Domain-specific guidance:
+{self._get_domain_guidance(context)}
+
 
 Rules (STRICT):
 - Responsibilities must be ABSTRACT
@@ -193,3 +237,36 @@ Return JSON ONLY in this format:
             return "Supporting service handling financial transaction logic"
 
         return "Core domain service handling business logic"
+    
+    
+    def _get_domain(self, context):
+        domain_context = getattr(context, "domain_context", None)
+        if not domain_context:
+            return "generic"
+        return domain_context.detection_result.primary_domain
+
+    def _get_domain_guidance(self, context):
+        domain = self._get_domain(context)
+
+        if domain == "healthcare":
+            return (
+                "- Ensure patient data handling responsibilities\n"
+                "- Include compliance or audit-related logic if applicable\n"
+                "- Consider consent validation and clinical data integrity"
+            )
+
+        if domain == "fintech":
+            return (
+                "- Include fraud detection or risk assessment if applicable\n"
+                "- Ensure transaction validation logic\n"
+                "- Consider audit or regulatory compliance checks"
+            )
+
+        if domain == "ecommerce":
+            return (
+                "- Include inventory coordination if relevant\n"
+                "- Consider order lifecycle orchestration\n"
+                "- Handle payment or refund processing semantics"
+            )
+
+        return "Follow general business logic responsibilities."

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple, TYPE_CHECKING
 import json
 import re
+from app.ir.validation import ValidationResult
 
 from app.domain.ontology_loader import OntologyLoader
 
@@ -86,105 +87,104 @@ class DomainEnrichmentStage:
     def __init__(self):
         self.loader = OntologyLoader()
     
-    def run(
-        self,
-        pipeline_context: Any,
-        domain_context: DomainContext,
-        use_llm: bool = True,
-    ) -> EnrichmentResult:
-        """
-        Execute domain enrichment on generated IR.
+    def run(self, context) -> ValidationResult:
         
-        Args:
-            pipeline_context: Contains generated IR (business_ir, service_ir, visual_ir)
-            domain_context: Domain information from DomainAdapterStage
-            use_llm: Whether to use LLM for suggestions
-            
-        Returns:
-            EnrichmentResult with applied and rejected suggestions
-        """
-        print("\n" + "="*60)
-        print("DOMAIN ENRICHMENT STAGE")
-        print("="*60)
-        
-        result = EnrichmentResult()
-        
-        if not use_llm:
-            print("[DomainEnrichment] LLM disabled, skipping enrichment")
-            return result
-        
-        # ============================
-        # 1. EXTRACT CURRENT IR STATE
-        # ============================
-        ir_json = self._extract_ir_state(pipeline_context)
-        print(f"[DomainEnrichment] Extracted IR state: {len(ir_json)} chars")
-        
-        # ============================
-        # 2. GET APPLIED PATTERNS
-        # ============================
-        applied_patterns = getattr(pipeline_context, 'applied_patterns', [])
-        print(f"[DomainEnrichment] Applied patterns: {applied_patterns}")
-        
-        # ============================
-        # 3. GENERATE LLM SUGGESTIONS
-        # ============================
-        llm_suggestions = self._get_llm_suggestions(
-            ir_json=ir_json,
-            domain_context=domain_context,
-            applied_patterns=applied_patterns,
-        )
-        
-        if not llm_suggestions:
-            print("[DomainEnrichment] No LLM suggestions generated")
-            return result
-        
-        result.llm_raw_output = llm_suggestions.get("raw", "")
-        result.reasoning = llm_suggestions.get("reasoning", "")
-        
-        print(f"[DomainEnrichment] LLM raw output: {result.llm_raw_output[:500]}...")
-        
-        # ============================
-        # 4. VALIDATE SUGGESTIONS AGAINST ONTOLOGY
-        # ============================
-        validated = self._validate_suggestions(
-            suggestions=llm_suggestions,
-            domain_context=domain_context,
-            pipeline_context=pipeline_context,
-        )
-        
-        result.suggested_entities = validated["entities"]
-        result.suggested_relationships = validated["relationships"]
-        result.compliance_additions = validated.get("compliance", [])
-        
-        # Log validation results
-        valid_entities = [e for e in result.suggested_entities if e.is_valid]
-        invalid_entities = [e for e in result.suggested_entities if not e.is_valid]
-        
-        print(f"[DomainEnrichment] Valid entities: {[e.entity_id for e in valid_entities]}")
-        print(f"[DomainEnrichment] Rejected entities: {[e.entity_id for e in invalid_entities]}")
-        
-        valid_rels = [r for r in result.suggested_relationships if r.is_valid]
-        print(f"[DomainEnrichment] Relationships validated: {len(valid_rels)}")
-        
-        # ============================
-        # 5. APPLY VALID ENRICHMENTS TO IR
-        # ============================
-        self._apply_enrichments(
-            pipeline_context=pipeline_context,
-            valid_entities=valid_entities,
-            valid_relationships=valid_rels,
-            result=result,
-        )
-        
-        result.rejected_entities = [e.entity_id for e in invalid_entities]
-        result.rejected_relationships = [
-            f"{r.from_id}->{r.to_id}" 
-            for r in result.suggested_relationships if not r.is_valid
-        ]
-        
-        print("="*60 + "\n")
-        
-        return result
+            print("\n" + "="*60)
+            print("DOMAIN ENRICHMENT STAGE")
+            print("="*60)
+
+            try:
+                # ----------------------------------
+                # Get domain context from pipeline
+                # ----------------------------------
+                domain_context = getattr(context, "domain_context", None)
+                if not domain_context:
+                    print("[DomainEnrichment] No domain context found, skipping.")
+                    return ValidationResult.success()
+
+                result = EnrichmentResult()
+
+                # ----------------------------------
+                # 1. EXTRACT CURRENT IR STATE
+                # ----------------------------------
+                ir_json = self._extract_ir_state(context)
+                print(f"[DomainEnrichment] Extracted IR state: {len(ir_json)} chars")
+
+                # ----------------------------------
+                # 2. GET APPLIED PATTERNS
+                # ----------------------------------
+                applied_patterns = getattr(context, "applied_patterns", [])
+                print(f"[DomainEnrichment] Applied patterns: {applied_patterns}")
+
+                # ----------------------------------
+                # 3. GENERATE LLM SUGGESTIONS
+                # ----------------------------------
+                llm_suggestions = self._get_llm_suggestions(
+                    ir_json=ir_json,
+                    domain_context=domain_context,
+                    applied_patterns=applied_patterns,
+                )
+
+                if not llm_suggestions:
+                    print("[DomainEnrichment] No LLM suggestions generated")
+                    context.enrichment_result = result
+                    return ValidationResult.success()
+
+                result.llm_raw_output = llm_suggestions.get("raw", "")
+                result.reasoning = llm_suggestions.get("reasoning", "")
+
+                print(f"[DomainEnrichment] LLM raw output: {result.llm_raw_output[:500]}...")
+
+                # ----------------------------------
+                # 4. VALIDATE SUGGESTIONS
+                # ----------------------------------
+                validated = self._validate_suggestions(
+                    suggestions=llm_suggestions,
+                    domain_context=domain_context,
+                    pipeline_context=context,
+                )
+
+                result.suggested_entities = validated["entities"]
+                result.suggested_relationships = validated["relationships"]
+                result.compliance_additions = validated.get("compliance", [])
+
+                valid_entities = [e for e in result.suggested_entities if e.is_valid]
+                invalid_entities = [e for e in result.suggested_entities if not e.is_valid]
+
+                print(f"[DomainEnrichment] Valid entities: {[e.entity_id for e in valid_entities]}")
+                print(f"[DomainEnrichment] Rejected entities: {[e.entity_id for e in invalid_entities]}")
+
+                valid_rels = [r for r in result.suggested_relationships if r.is_valid]
+                print(f"[DomainEnrichment] Relationships validated: {len(valid_rels)}")
+
+                # ----------------------------------
+                # 5. APPLY VALID ENRICHMENTS
+                # ----------------------------------
+                self._apply_enrichments(
+                    pipeline_context=context,
+                    valid_entities=valid_entities,
+                    valid_relationships=valid_rels,
+                    result=result,
+                )
+
+                result.rejected_entities = [e.entity_id for e in invalid_entities]
+                result.rejected_relationships = [
+                    f"{r.from_id}->{r.to_id}"
+                    for r in result.suggested_relationships
+                    if not r.is_valid
+                ]
+
+                # Store result in pipeline context
+                context.enrichment_result = result
+
+                print("="*60 + "\n")
+                return ValidationResult.success()
+
+            except Exception as e:
+                return ValidationResult.failure(
+                    errors=[f"DomainEnrichmentStage failed: {str(e)}"]
+                )
+
     
     def _extract_ir_state(self, context: Any) -> str:
         """Extract current IR state as JSON for LLM prompt."""

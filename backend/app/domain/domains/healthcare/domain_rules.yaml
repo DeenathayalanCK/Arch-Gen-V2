@@ -1,0 +1,34 @@
+version: "1.0"
+
+baseline_services:
+  - id: ehr_service
+    name: EHR Service
+    type: logical
+
+  - id: appointment_service
+    name: Appointment Service
+    type: logical
+
+mandatory_dependencies:
+  - from: web_app
+    to: ehr_service
+    interaction: calls
+
+  - from: appointment_service
+    to: ehr_service
+    interaction: reads_writes
+
+baseline_responsibilities:
+  ehr_service:
+    - name: Manage patient records
+      type: logic
+
+    - name: Store clinical data
+      type: persistence
+
+  appointment_service:
+    - name: Schedule appointments
+      type: logic
+
+    - name: Notify patients
+      type: integration

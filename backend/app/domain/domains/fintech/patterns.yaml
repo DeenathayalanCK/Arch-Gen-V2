@@ -1,0 +1,27 @@
+patterns:
+  - id: secure_payment_flow
+    name: Secure Payment Processing
+    description: Ensures secure transaction processing with audit logging
+    applicable_when:
+      - payment
+      - transaction
+    tags:
+      - security
+      - compliance
+      - fintech
+    components:
+      - id: fraud_check
+        name: Fraud Detection Service
+        type: service
+        description: Detects suspicious transactions
+      - id: audit_log
+        name: Audit Logging Service
+        type: service
+        description: Logs financial transactions
+    connections:
+      - from: "{{payment_service}}"
+        to: fraud_check
+        relationship: validates_with
+      - from: "{{payment_service}}"
+        to: audit_log
+        relationship: logs_to
