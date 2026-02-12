@@ -10,8 +10,37 @@ from app.ir.responsibility_ir import ServiceResponsibilities, ResponsibilityDepe
 
 @dataclass
 class PipelineContext:
-    # Raw input (authoritative)
-    requirements_text: str
+    """Context object that flows through the pipeline stages."""
+    
+    # Requirements text (can be set after init)
+    requirements_text: str = ""
+    
+    # Core IR fields
+    business_ir: Any = None
+    service_ir: Any = None
+    data_ir: Any = None
+    infra_ir: Any = None
+    
+    # Visual IR
+    visual_ir: Any = None
+    
+    # System context (C4 L1)
+    system_context_ir: Any = None
+    
+    # Pattern tracking
+    applied_patterns: List[str] = field(default_factory=list)
+    
+    # Error tracking
+    errors: List[str] = field(default_factory=list)
+    
+    # Domain adapter context
+    domain_context: Any = None
+    
+    # Domain enrichment result
+    enrichment_result: Any = None
+    
+    # Domain validation result
+    domain_validation: Any = None
 
     # Decomposition
     decomposed: DecomposedRequirements | None = None
@@ -22,21 +51,6 @@ class PipelineContext:
     responsibility_map: Dict[str, ServiceResponsibilities] = field(default_factory=dict)
     data_ir: Optional[DataIR] = None
     infra_ir: Optional[InfraIR] = None
-
-    # C4 Level 1: System Context IR
-    system_context_ir: Optional[Any] = None  # SystemContextIR from system_context_stage
-
-    # Visual IR (generated after responsibility stage)
-    visual_ir: Optional[Any] = None  # VisualDiagram, imported lazily to avoid circular deps
-
-    # Inferred dependencies
-    responsibility_dependencies: List[ResponsibilityDependency] = field(default_factory=list)
-    responsibility_data_access: List[ResponsibilityDataAccess] = field(default_factory=list)
-
-    # Applied patterns
-    applied_patterns: List[str] = field(default_factory=list)
-
-    errors: list[str] = field(default_factory=list)
 
     @property
     def requirements(self) -> str:

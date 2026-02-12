@@ -1,0 +1,24 @@
+rules:
+  - id: require_audit_logging
+    description: All healthcare systems must have audit logging
+    condition: "has:audit"
+    severity: error
+    message: "HIPAA requires audit logging - add an Audit Service or Audit Log component"
+
+  - id: require_patient_db_encryption
+    description: Patient database should have encryption
+    condition: "has:encryption"
+    severity: warning
+    message: "Patient data should be encrypted at rest - consider adding encryption service"
+
+  - id: service_to_audit_connection
+    description: Services should log to audit trail
+    condition: "connects:service->audit"
+    severity: warning
+    message: "Services should connect to audit logging for HIPAA compliance"
+
+  - id: require_auth
+    description: Healthcare systems need authentication
+    condition: "has:auth"
+    severity: warning
+    message: "Healthcare systems require authentication - add an Auth Service"
