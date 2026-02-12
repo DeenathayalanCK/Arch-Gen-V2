@@ -1,0 +1,18 @@
+rules:
+  - id: fintech_ledger_required
+    description: Ledger service must exist in fintech systems
+    condition: "has:ledger_service"
+    severity: error
+    message: "Ledger Service is mandatory in fintech architecture"
+
+  - id: fintech_payment_to_ledger
+    description: Payment must connect to Ledger
+    condition: "connects:Payment Service->Ledger Service"
+    severity: error
+    message: "Payment Service must record transactions in Ledger Service"
+
+  - id: fintech_audit_required
+    description: Financial systems must support audit logging
+    condition: "has:audit"
+    severity: warning
+    message: "Audit logging is recommended for compliance"

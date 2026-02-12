@@ -1,0 +1,50 @@
+domain: ecommerce
+version: "1.0"
+description: "E-commerce domain ontology for online retail systems"
+
+entities:
+  - id: order_service
+    name: Order Management Service
+    type: service
+    required: true
+
+  - id: catalog_service
+    name: Product Catalog Service
+    type: service
+    required: true
+
+  - id: inventory_service
+    name: Inventory Service
+    type: service
+    required: true
+
+  - id: payment_service
+    name: Payment Service
+    type: service
+    required: true
+
+  - id: order_db
+    name: Order Database
+    type: datastore
+    required: true
+
+relationships:
+  - from: order_service
+    to: inventory_service
+    relationship: reserves_stock
+    required: true
+
+  - from: order_service
+    to: payment_service
+    relationship: initiates_payment
+    required: true
+
+required_components:
+  - order_service
+  - catalog_service
+  - inventory_service
+
+compliance_requirements:
+  - Payment Security
+  - Order Traceability
+  - Data Protection

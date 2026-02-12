@@ -1,0 +1,24 @@
+patterns:
+  - id: checkout_flow
+    name: Checkout Processing Pattern
+    description: Manages order checkout with stock reservation and payment
+    applicable_when:
+      - checkout
+      - order
+    tags:
+      - ecommerce
+      - transaction
+    components:
+      - id: order_service
+        name: Order Management Service
+        type: service
+      - id: inventory_service
+        name: Inventory Service
+        type: service
+    connections:
+      - from: order_service
+        to: inventory_service
+        relationship: reserves_stock
+      - from: order_service
+        to: "{{payment_service}}"
+        relationship: initiates_payment

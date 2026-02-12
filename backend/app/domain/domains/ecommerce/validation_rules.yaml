@@ -1,0 +1,18 @@
+rules:
+  - id: ecommerce_inventory_required
+    description: Inventory Service must exist
+    condition: "has:inventory_service"
+    severity: error
+    message: "Inventory Service is required in e-commerce systems"
+
+  - id: ecommerce_order_to_payment
+    description: Order Service must connect to Payment Service
+    condition: "connects:Order Management Service->Payment Service"
+    severity: error
+    message: "Orders must initiate payment processing"
+
+  - id: ecommerce_stock_reservation
+    description: Order must reserve inventory
+    condition: "connects:Order Management Service->Inventory Service"
+    severity: warning
+    message: "Orders should reserve inventory before confirmation"

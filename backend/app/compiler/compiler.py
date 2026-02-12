@@ -1,3 +1,5 @@
+#backend\app\compiler\compiler.py
+
 from typing import List, Optional
 import re
 
@@ -116,21 +118,28 @@ class MermaidDiagram:
     # ---------- data access edges ----------
 
     def add_data_access_edges(self, data_ir: DataIR, service_ir: ServiceIR):
-        datastore_lookup = {ds.id: ds.name for ds in data_ir.datastores}
-        service_names = {svc.name for svc in service_ir.services}
+        # Map service ID → service name
+        service_id_to_name = {
+            svc.id: svc.name for svc in service_ir.services
+        }
+
+        # Map datastore ID → datastore name
+        datastore_id_to_name = {
+            ds.id: ds.name for ds in data_ir.datastores
+        }
 
         for access in data_ir.access_patterns:
-            if access.service_id not in service_names:
-                continue
+            service_name = service_id_to_name.get(access.service_id)
+            datastore_name = datastore_id_to_name.get(access.datastore_id)
 
-            datastore_name = datastore_lookup.get(access.datastore_id)
-            if not datastore_name:
-                continue
+            if not service_name or not datastore_name:
+                continue  # Safety
 
-            svc_node = f"svc_{mermaid_id(access.service_id)}"
+            svc_node = f"svc_{mermaid_id(service_name)}"
             data_node = f"data_{mermaid_id(datastore_name)}"
 
             self._add_edge(svc_node, data_node, access.access_type)
+
 
     # ---------- infra ----------
 

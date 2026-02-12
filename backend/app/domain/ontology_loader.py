@@ -85,6 +85,11 @@ class DomainPatternConfig:
     connections: List[Dict[str, Any]] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
 
+@dataclass
+class DomainRules:
+    baseline_services: List[Dict[str, Any]] = field(default_factory=list)
+    mandatory_dependencies: List[Dict[str, Any]] = field(default_factory=list)
+    baseline_responsibilities: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
 
 class OntologyLoader:
     """
@@ -113,7 +118,29 @@ class OntologyLoader:
         self._cache: Dict[str, DomainOntology] = {}
         self._patterns_cache: Dict[str, List[DomainPatternConfig]] = {}
         self._rules_cache: Dict[str, List[ValidationRule]] = {}
-        
+        self._rules_config_cache: Dict[str, DomainRules] = {}
+
+    def load_domain_rules(self, domain: str) -> dict:
+        if yaml is None:
+            return {}
+
+        rules_path = os.path.join(self.domains_path, domain, "domain_rules.yaml")
+
+        if not os.path.exists(rules_path):
+            print(f"[OntologyLoader] No domain rules found for {domain}")
+            return {}
+
+        try:
+            with open(rules_path, "r") as f:
+                data = yaml.safe_load(f)
+            print(f"[OntologyLoader] Loaded domain rules for {domain}")
+            return data or {}
+        except Exception as e:
+            print(f"[OntologyLoader] Error loading domain rules for {domain}: {e}")
+            return {}
+
+
+
     def _get_default_domains_path(self) -> str:
         return os.path.join(os.path.dirname(__file__), "domains")
     

@@ -2,6 +2,7 @@ from __future__ import annotations  # Enable postponed evaluation of annotations
 
 from dataclasses import dataclass, field
 from typing import List, Any, Optional, TYPE_CHECKING
+from app.ir.validation import ValidationResult
 
 from app.domain.ontology_loader import ValidationRule
 
@@ -48,56 +49,64 @@ class DomainValidationStage:
     2. Domain validation rules
     3. Compliance requirements
     """
-    
-    def run(
-        self,
-        pipeline_context: Any,
-        domain_context: Optional[DomainContext],
-    ) -> DomainValidationResult:
+
+    def run(self, context) -> ValidationResult:
         """
-        Execute domain validation.
-        
-        Args:
-            pipeline_context: Contains generated IR
-            domain_context: Domain information from DomainAdapterStage
-            
-        Returns:
-            DomainValidationResult
+        Execute domain validation as a proper pipeline stage.
         """
+
         print("\n" + "="*60)
         print("DOMAIN VALIDATION STAGE")
         print("="*60)
-        
-        result = DomainValidationResult(is_valid=True, is_compliant=True)
-        
-        if not domain_context:
-            print("[DomainValidation] No domain context, skipping domain validation")
-            return result
-        
-        # ============================
-        # 1. VALIDATE REQUIRED COMPONENTS
-        # ============================
-        self._validate_required_components(pipeline_context, domain_context, result)
-        
-        # ============================
-        # 2. APPLY VALIDATION RULES
-        # ============================
-        self._apply_validation_rules(pipeline_context, domain_context, result)
-        
-        # ============================
-        # 3. CHECK COMPLIANCE
-        # ============================
-        self._check_compliance(pipeline_context, domain_context, result)
-        
-        # Determine overall validity
-        has_errors = any(i.severity == "error" for i in result.issues)
-        result.is_valid = not has_errors
-        
-        print(f"[DomainValidation] Valid: {result.is_valid}, Compliant: {result.is_compliant}")
-        print(f"[DomainValidation] Issues: {len(result.issues)}")
-        print("="*60 + "\n")
-        
-        return result
+
+        try:
+            domain_context = getattr(context, "domain_context", None)
+
+            result = DomainValidationResult(is_valid=True, is_compliant=True)
+
+            if not domain_context:
+                print("[DomainValidation] No domain context, skipping domain validation")
+                context.domain_validation = result
+                return ValidationResult.success()
+
+            # ============================
+            # 1. VALIDATE REQUIRED COMPONENTS
+            # ============================
+            self._validate_required_components(context, domain_context, result)
+
+            # ============================
+            # 2. APPLY VALIDATION RULES
+            # ============================
+            self._apply_validation_rules(context, domain_context, result)
+
+            # ============================
+            # 3. CHECK COMPLIANCE
+            # ============================
+            self._check_compliance(context, domain_context, result)
+
+            # Determine overall validity
+            has_errors = any(i.severity == "error" for i in result.issues)
+            result.is_valid = not has_errors
+
+            # Store result in pipeline context
+            context.domain_validation = result
+
+            print(f"[DomainValidation] Valid: {result.is_valid}, Compliant: {result.is_compliant}")
+            print(f"[DomainValidation] Issues: {len(result.issues)}")
+            print("="*60 + "\n")
+
+            if has_errors:
+                return ValidationResult.failure(
+                    errors=[i.message for i in result.issues if i.severity == "error"]
+                )
+
+            return ValidationResult.success()
+
+        except Exception as e:
+            return ValidationResult.failure(
+                errors=[f"DomainValidationStage failed: {str(e)}"]
+            )
+
     
     def _validate_required_components(
         self,

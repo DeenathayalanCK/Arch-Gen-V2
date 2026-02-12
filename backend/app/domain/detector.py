@@ -1,3 +1,5 @@
+#backend\app\domain\detector.py
+
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from enum import Enum
@@ -27,6 +29,8 @@ class DomainDetectionResult:
     sub_domains: List[str] = field(default_factory=list)
     keyword_matches: Dict[str, int] = field(default_factory=dict)
     reasoning: str = ""
+    structure_mode: str = "AUTO"
+
 
     def to_dict(self) -> dict:
         return {
@@ -109,6 +113,14 @@ class DomainDetector:
         "high_availability": ["ha", "high availability", "failover", "disaster recovery", "redundant"],
         "microservices": ["microservice", "service mesh", "k8s", "kubernetes", "container", "docker"],
     }
+    STRUCTURE_KEYWORDS = [
+        "frontend", "backend", "edge", "identity", "data layer",
+        "api gateway", "load balancer", "oauth", "authentication",
+        "authorization", "microservice", "database", "cache",
+        "request flow", "response", "layer", "tier"
+    ]
+
+
 
     CONFIDENCE_THRESHOLD_HIGH = 0.7
     CONFIDENCE_THRESHOLD_LOW = 0.3
@@ -176,7 +188,11 @@ class DomainDetector:
                 return llm_result
         
         return keyword_result
-
+    def _detect_structure_mode(self, requirements: str) -> str:
+        text = requirements.lower()
+        hits = sum(1 for k in self.STRUCTURE_KEYWORDS if k in text)
+        return "STRUCTURED" if hits >= 2 else "AUTO"
+    
     def _keyword_detection(self, requirements: str) -> DomainDetectionResult:
         """Deterministic keyword-based domain detection."""
         text_lower = requirements.lower()
@@ -228,6 +244,8 @@ class DomainDetector:
         if matches.get(best_domain, 0) >= 3:
             confidence = min(0.95, confidence + 0.1)
         
+        structure_mode = self._detect_structure_mode(requirements)
+
         return DomainDetectionResult(
             primary_domain=best_domain,
             confidence=confidence,
@@ -235,8 +253,11 @@ class DomainDetector:
             sub_domains=list(set(sub_domains)),
             keyword_matches={k: v for k, v in matches.items() if v > 0},
             reasoning=f"Matched {matches.get(best_domain, 0)} keywords for {best_domain}",
+            structure_mode=structure_mode,
         )
 
+    
+    
     def _llm_detection(self, requirements: str, keyword_result: DomainDetectionResult) -> Optional[DomainDetectionResult]:
         """LLM-based domain detection fallback."""
         try:

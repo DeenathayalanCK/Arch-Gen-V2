@@ -100,48 +100,62 @@ class PatternRegistry:
         print(f"[REGISTRY DEBUG] get('{pattern_id}') -> {'Found' if pattern else 'Not found'}")
         return pattern
     
-    def find_applicable(self, context: str, max_results: int = 5) -> list[Pattern]:
-        """Find patterns applicable to a given context"""
+    def find_applicable(self, context: str, domain: Optional[str] = None, max_results: int = 5) -> list[Pattern]:
+        """Find patterns applicable to a given context with optional domain filtering"""
+
         context_lower = context.lower()
         scored_patterns = []
-        
-        print(f"[REGISTRY DEBUG] find_applicable called with context: '{context[:50]}...'")
-        print(f"[REGISTRY DEBUG] Searching through {len(self.patterns)} patterns")
-        
+
+        print(f"[REGISTRY DEBUG] find_applicable called (domain={domain})")
+
         for pattern in self.patterns.values():
+
+            # -----------------------------
+            # Domain filtering
+            # -----------------------------
+            if domain:
+                tags_lower = [t.lower() for t in pattern.tags]
+
+                # Allow:
+                # - Base patterns (no domain tag)
+                # - Patterns tagged with this domain
+                if "domain_pattern" in tags_lower:
+                    if domain.lower() not in tags_lower:
+                        continue
+
             score = 0
-            
-            # Check applicable_when keywords
+
+            # Applicable_when keywords
             for keyword in pattern.applicable_when:
                 if keyword.lower() in context_lower:
                     score += 2
-                    print(f"[REGISTRY DEBUG]   Pattern '{pattern.id}' matched keyword '{keyword}' (+2)")
-            
-            # Check tags
+
+            # Tag matching
             for tag in pattern.tags:
                 if tag.lower() in context_lower:
                     score += 1
-                    print(f"[REGISTRY DEBUG]   Pattern '{pattern.id}' matched tag '{tag}' (+1)")
-            
-            # Check name and description
+
+            # Name & description matching
             if pattern.name.lower() in context_lower:
                 score += 3
+
             if any(word in context_lower for word in pattern.description.lower().split()[:10]):
                 score += 1
-            
+
             if score > 0:
                 scored_patterns.append((score, pattern))
-        
-        # Sort by score descending
+
         scored_patterns.sort(key=lambda x: x[0], reverse=True)
-        results = [p for _, p in scored_patterns[:max_results]]
+        return [p for _, p in scored_patterns[:max_results]]
+
         
         print(f"[REGISTRY DEBUG] Found {len(results)} applicable patterns: {[p.id for p in results]}")
         return results
     
-    def suggest_patterns(self, context: str, max_results: int = 5) -> list[Pattern]:
+    def suggest_patterns(self, context: str, domain: Optional[str] = None, max_results: int = 5) -> list[Pattern]:
         """Suggest patterns based on context - alias for find_applicable"""
-        return self.find_applicable(context, max_results)
+        return self.find_applicable(context, domain=domain, max_results=max_results)
+
     
     def get_by_category(self, category: PatternCategory) -> list[Pattern]:
         """Get all patterns in a category"""

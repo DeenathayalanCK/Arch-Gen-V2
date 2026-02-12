@@ -14,6 +14,8 @@ class ServiceDependencyStage(PipelineStage):
     1. Edge services depend on logical services
     2. Shared datastore access implies dependency
     3. Responsibility semantics imply dependency
+    4. Domain-specific mandatory dependencies
+
     """
 
     name = "service_dependency"
@@ -158,8 +160,49 @@ class ServiceDependencyStage(PipelineStage):
                     seen.add(key)
 
         # --------------------------------------------------
+        # Rule 4: Domain-specific mandatory dependencies (CONFIG-DRIVEN)
+        # --------------------------------------------------
+
+        domain_context = getattr(context, "domain_context", None)
+
+        if domain_context and domain_context.domain_rules:
+            mandatory_deps = domain_context.domain_rules.get("mandatory_dependencies", [])
+
+            for dep in mandatory_deps:
+                source_name = dep.get("from")
+                target_name = dep.get("to")
+                interaction = dep.get("interaction", "uses")
+
+                source_service = service_by_name.get(source_name)
+                target_service = service_by_name.get(target_name)
+
+                if not source_service or not target_service:
+                    continue
+
+                key = (source_service.id, target_service.id)
+                if key in seen:
+                    continue
+
+                dependencies.append(
+                    ServiceDependency(
+                        from_service_id=source_service.id,
+                        to_service_id=target_service.id,
+                        interaction=interaction,
+                    )
+                )
+                seen.add(key)
+
+
+
+        # --------------------------------------------------
         # Finalize
         # --------------------------------------------------
 
         context.service_ir.dependencies.extend(dependencies)
+        
+        print("[DEBUG] Final dependencies:")
+        for d in context.service_ir.dependencies:
+            print(f"{d.from_service_id} -> {d.to_service_id} ({d.interaction})")
+
+
         return ValidationResult.success()
