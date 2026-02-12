@@ -96,17 +96,19 @@ def generate_architecture(request: GenerateRequest):
         controller = PipelineController()
 
         # ============================
-        # 1️⃣ PIPELINE EXECUTION
+        # 1️⃣ PIPELINE EXECUTION (now includes domain stages)
         # ============================
         context = controller.run(
             request.requirements,
             include_system_context=request.include_system_context,
+            enable_domain_adapter=getattr(request, 'enable_domain_adapter', True),
+            enable_domain_enrichment=getattr(request, 'enable_domain_enrichment', True),
         )
 
         # ============================
         # 2️⃣ AUTO-INJECT PATTERNS (if requested)
         # ============================
-        applied_patterns = []
+        applied_patterns = getattr(context, 'applied_patterns', []) or []
         if request.patterns and len(request.patterns) > 0:
             print(f"\n===== INJECTING PATTERNS: {request.patterns} =====")
             registry = get_pattern_registry()
@@ -164,7 +166,7 @@ def generate_architecture(request: GenerateRequest):
         }
 
         # ============================
-        # 5️⃣ VALIDATE AND AUTO-FIX FIRST
+        # 5️⃣ VALIDATE AND AUTO-FIX
         # ============================
         validation_result = None
         fix_result = None
@@ -181,7 +183,9 @@ def generate_architecture(request: GenerateRequest):
                 print(f"  - [{issue.code}] {issue.message}")
             print("================================\n")
             
-            # Auto-fix if invalid or incomplete
+            # ============================================================
+            # AUTO-FIX SECTION - Uncomment to enable auto-fixing
+            # ============================================================
             if not initial_validation.is_valid or not initial_validation.is_complete:
                 print("\n[AUTO-FIX] Diagram has issues, attempting auto-fix...")
                 
@@ -216,6 +220,12 @@ def generate_architecture(request: GenerateRequest):
             print(f"\n===== FINAL VALIDATION =====")
             print(validation_result.get_summary())
             print("================================\n")
+            # ============================================================
+            # END AUTO-FIX SECTION
+            # ============================================================
+            
+            # When auto-fix is disabled, use initial validation
+            # validation_result = initial_validation
 
         # ============================
         # 6️⃣ DIAGRAM COMPILATION - AFTER FIXING
@@ -258,29 +268,45 @@ def generate_architecture(request: GenerateRequest):
         # 8️⃣ SYSTEM CONTEXT (C4 L1)
         # ============================
         system_context_payload = None
-        if request.include_system_context and context.system_context_ir:
+        if request.include_system_context and hasattr(context, 'system_context_ir') and context.system_context_ir:
             system_context_payload = serialize_ir(context.system_context_ir)
 
-        if context.errors:
-            return {
-                "status": "warning",
-                "warnings": context.errors,
-                "mermaid": mermaid_source,
-                "d2": d2_source,
-                "diagram": {"type": "mermaid", "source": mermaid_source},
-                "ir": ir_payload,
-                "system_context": system_context_payload,
-                "suggested_patterns": suggested_ids,
-                "applied_patterns": applied_patterns,
-                "validation": validation_result.to_dict() if validation_result else None,
-                "auto_fix": fix_result.to_dict() if fix_result else {"fix_type": "none", "success": True, "changes_made": []},
-            }
+        # ============================
+        # 9️⃣ DOMAIN CONTEXT PAYLOAD
+        # ============================
+        domain_payload = None
+        if hasattr(context, 'domain_context') and context.domain_context is not None:
+            try:
+                domain_payload = context.domain_context.to_dict()
+                print(f"[Routes] Domain context serialized: {domain_payload.get('domain', 'unknown')}")
+            except Exception as e:
+                print(f"[Routes] Warning: Could not serialize domain_context: {e}")
+                domain_payload = {"error": str(e)}
+        
+        enrichment_payload = None
+        if hasattr(context, 'enrichment_result') and context.enrichment_result is not None:
+            try:
+                enrichment_payload = context.enrichment_result.to_dict()
+            except Exception as e:
+                print(f"[Routes] Warning: Could not serialize enrichment_result: {e}")
+                enrichment_payload = {"error": str(e)}
+        
+        domain_validation_payload = None
+        if hasattr(context, 'domain_validation') and context.domain_validation is not None:
+            try:
+                domain_validation_payload = context.domain_validation.to_dict()
+            except Exception as e:
+                print(f"[Routes] Warning: Could not serialize domain_validation: {e}")
+                domain_validation_payload = {"error": str(e)}
 
         # ============================
-        # BUILD RESPONSE WITH FIX INFO
+        # 🔟 BUILD RESPONSE
         # ============================
+        # Get errors safely
+        errors_list = getattr(context, 'errors', []) or []
+        
         response = {
-            "status": "success" if not context.errors else "warning",
+            "status": "success" if not errors_list else "warning",
             "mermaid": mermaid_source,
             "d2": d2_source,
             "diagram": {"type": "mermaid", "source": mermaid_source},
@@ -290,10 +316,14 @@ def generate_architecture(request: GenerateRequest):
             "applied_patterns": applied_patterns,
             "validation": validation_result.to_dict() if validation_result else None,
             "auto_fix": fix_result.to_dict() if fix_result else {"fix_type": "none", "success": True, "changes_made": []},
+            # Domain-aware fields
+            "domain": domain_payload,
+            "domain_enrichment": enrichment_payload,
+            "domain_validation": domain_validation_payload,
         }
         
-        if context.errors:
-            response["warnings"] = context.errors
+        if errors_list:
+            response["warnings"] = errors_list
         
         return response
 
@@ -485,22 +515,27 @@ def get_pattern(pattern_id: str):
     if not pattern:
         return {"error": f"Pattern '{pattern_id}' not found"}
     
+    # Defensive: handle patterns that may not have trade_offs (e.g., SimpleNamespace)
+    trade_offs = getattr(pattern, "trade_offs", None)
+    if trade_offs is None:
+        trade_offs = {}
+
     return {
         "id": pattern.id,
         "name": pattern.name,
         "description": pattern.description,
-        "category": pattern.category.value,
+        "category": getattr(pattern.category, "value", str(getattr(pattern, "category", ""))),
         "components": [
-            {"id": c.id, "name": c.name, "type": c.node_type, "description": c.description}
-            for c in pattern.components
+            {"id": c.id, "name": c.name, "type": getattr(c, "node_type", ""), "description": getattr(c, "description", "")}
+            for c in getattr(pattern, "components", [])
         ],
         "connections": [
-            {"from": c.from_id, "to": c.to_id, "relationship": c.relationship}
-            for c in pattern.connections
+            {"from": c.from_id, "to": c.to_id, "relationship": getattr(c, "relationship", "")}
+            for c in getattr(pattern, "connections", [])
         ],
-        "tags": pattern.tags,
-        "applicable_when": pattern.applicable_when,
-        "trade_offs": pattern.trade_offs,
+        "tags": getattr(pattern, "tags", []),
+        "applicable_when": getattr(pattern, "applicable_when", []),
+        "trade_offs": trade_offs,
     }
 
 

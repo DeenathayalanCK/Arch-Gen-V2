@@ -1,0 +1,84 @@
+patterns:
+  - id: hipaa_audit_trail
+    name: HIPAA Audit Trail
+    description: Comprehensive audit logging for HIPAA compliance
+    applicable_when:
+      - healthcare
+      - hipaa
+      - patient
+      - medical
+    tags:
+      - compliance
+      - security
+      - audit
+    components:
+      - id: audit_service
+        name: Audit Service
+        type: service
+        description: Captures all data access events
+      - id: audit_db
+        name: Audit Database
+        type: datastore
+        description: Immutable audit log storage
+      - id: audit_dashboard
+        name: Audit Dashboard
+        type: interface
+        description: Compliance reporting interface
+    connections:
+      - from: audit_service
+        to: audit_db
+        relationship: writes_to
+      - from: audit_dashboard
+        to: audit_service
+        relationship: queries
+
+  - id: patient_consent_management
+    name: Patient Consent Management
+    description: Track and enforce patient data sharing consent
+    applicable_when:
+      - healthcare
+      - patient
+      - consent
+      - privacy
+    tags:
+      - compliance
+      - privacy
+    components:
+      - id: consent_service
+        name: Consent Service
+        type: service
+        description: Manages patient consent records
+      - id: consent_db
+        name: Consent Database
+        type: datastore
+        description: Consent record storage
+    connections:
+      - from: consent_service
+        to: consent_db
+        relationship: reads_writes
+
+  - id: hl7_fhir_integration
+    name: HL7 FHIR Integration
+    description: Standard healthcare interoperability layer
+    applicable_when:
+      - healthcare
+      - fhir
+      - hl7
+      - interoperability
+      - integration
+    tags:
+      - integration
+      - interoperability
+    components:
+      - id: fhir_server
+        name: FHIR Server
+        type: service
+        description: HL7 FHIR compliant API server
+      - id: fhir_gateway
+        name: FHIR Gateway
+        type: interface
+        description: External FHIR endpoint
+    connections:
+      - from: fhir_gateway
+        to: fhir_server
+        relationship: routes_to

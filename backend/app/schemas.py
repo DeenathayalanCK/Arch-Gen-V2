@@ -8,6 +8,9 @@ class GenerateRequest(BaseModel):
     output_format: str = "mermaid"  # mermaid | d2
     patterns: List[str] = []  # Pattern IDs to auto-inject
     detail_level: str = "high"  # Add this field
+    enable_domain_adapter: bool = True  # Enable domain adapter
+    enable_domain_enrichment: bool = True  # Enable domain enrichment
+    force_domain: str = None  # Override auto-detection
 
 
 class RefineRequest(BaseModel):

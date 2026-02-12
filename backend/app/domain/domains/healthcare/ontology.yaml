@@ -1,0 +1,82 @@
+domain: healthcare
+version: "1.0"
+description: "Healthcare domain ontology for medical systems"
+
+entities:
+  - id: patient_service
+    name: Patient Service
+    type: service
+    description: Manages patient records and demographics
+    required: true
+
+  - id: ehr_system
+    name: EHR System
+    type: service
+    description: Electronic Health Record management
+
+  - id: appointment_service
+    name: Appointment Service
+    type: service
+    description: Scheduling and appointment management
+
+  - id: prescription_service
+    name: Prescription Service
+    type: service
+    description: Medication and prescription management
+
+  - id: lab_service
+    name: Lab Results Service
+    type: service
+    description: Laboratory test results management
+
+  - id: billing_service
+    name: Billing Service
+    type: service
+    description: Medical billing and claims processing
+
+  - id: patient_db
+    name: Patient Database
+    type: datastore
+    description: HIPAA-compliant patient data storage
+    required: true
+
+  - id: audit_log
+    name: Audit Log
+    type: datastore
+    description: HIPAA audit trail
+    required: true
+
+  - id: fhir_gateway
+    name: FHIR Gateway
+    type: interface
+    description: HL7 FHIR interoperability layer
+
+relationships:
+  - from: patient_service
+    to: patient_db
+    relationship: reads_writes
+    required: true
+
+  - from: ehr_system
+    to: patient_db
+    relationship: reads_writes
+
+  - from: prescription_service
+    to: patient_service
+    relationship: queries
+
+  - from: service
+    to: audit_log
+    relationship: logs_to
+    required: true
+
+required_components:
+  - patient_service
+  - patient_db
+  - audit_log
+
+compliance_requirements:
+  - HIPAA
+  - Audit Logging
+  - Data Encryption
+  - Access Control

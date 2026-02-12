@@ -1,0 +1,79 @@
+domain: fintech
+version: "1.0"
+description: "Financial technology domain ontology"
+
+entities:
+  - id: payment_service
+    name: Payment Service
+    type: service
+    description: Processes payment transactions
+    required: true
+
+  - id: account_service
+    name: Account Service
+    type: service
+    description: Manages user accounts and balances
+    required: true
+
+  - id: transaction_service
+    name: Transaction Service
+    type: service
+    description: Handles transaction processing and history
+
+  - id: fraud_detection
+    name: Fraud Detection Service
+    type: service
+    description: Real-time fraud analysis
+
+  - id: kyc_service
+    name: KYC Service
+    type: service
+    description: Know Your Customer verification
+
+  - id: ledger_db
+    name: Ledger Database
+    type: datastore
+    description: Double-entry accounting ledger
+    required: true
+
+  - id: audit_trail
+    name: Audit Trail
+    type: datastore
+    description: Financial audit logging
+    required: true
+
+  - id: payment_gateway
+    name: Payment Gateway
+    type: interface
+    description: External payment processor integration
+
+relationships:
+  - from: payment_service
+    to: ledger_db
+    relationship: reads_writes
+    required: true
+
+  - from: payment_service
+    to: fraud_detection
+    relationship: calls
+    required: true
+
+  - from: account_service
+    to: ledger_db
+    relationship: reads_writes
+
+  - from: transaction_service
+    to: audit_trail
+    relationship: logs_to
+
+required_components:
+  - payment_service
+  - ledger_db
+  - audit_trail
+
+compliance_requirements:
+  - PCI-DSS
+  - SOX
+  - AML
+  - KYC
+  - Audit Trail
