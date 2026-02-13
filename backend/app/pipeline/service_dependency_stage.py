@@ -35,7 +35,7 @@ class ServiceDependencyStage(PipelineStage):
         # Helper maps
         # --------------------------------------------------
 
-        service_by_name = {svc.name: svc for svc in services}
+        service_by_name = {svc.name.lower(): svc for svc in services}
         service_by_id = {svc.id: svc for svc in services}
 
         logical_services = [
@@ -173,8 +173,9 @@ class ServiceDependencyStage(PipelineStage):
                 target_name = dep.get("to")
                 interaction = dep.get("interaction", "uses")
 
-                source_service = service_by_name.get(source_name)
-                target_service = service_by_name.get(target_name)
+                source_service = service_by_name.get(source_name.lower()) if source_name else None
+                target_service = service_by_name.get(target_name.lower()) if target_name else None
+
 
                 if not source_service or not target_service:
                     continue
@@ -198,11 +199,28 @@ class ServiceDependencyStage(PipelineStage):
         # Finalize
         # --------------------------------------------------
 
-        context.service_ir.dependencies.extend(dependencies)
+        #context.service_ir.dependencies.extend(dependencies)
+
+        # --------------------------------------------------
+        # Finalize (DEDUP SAFE VERSION)
+        # --------------------------------------------------
+
+        # Combine old + new (if any)
+        all_deps = context.service_ir.dependencies + dependencies
+
+        unique_map = {}
+
+        for dep in all_deps:
+            key = (dep.from_service_id, dep.to_service_id, dep.interaction)
+            unique_map[key] = dep  # overwrite duplicates safely
+
+        context.service_ir.dependencies = list(unique_map.values())
+
+        
         
         print("[DEBUG] Final dependencies:")
         for d in context.service_ir.dependencies:
             print(f"{d.from_service_id} -> {d.to_service_id} ({d.interaction})")
-
+    
 
         return ValidationResult.success()
