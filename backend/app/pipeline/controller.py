@@ -41,7 +41,7 @@ class PipelineController:
             ResponsibilityDependencyInferenceStage(),
             InfraStage(),
             ReferenceInjectionStage(),
-            self._get_domain_enrichment(),       # After IR generation
+            #self._get_domain_enrichment(),       # After IR generation
             self._get_domain_validation(),       # Final validation
         ]
 
@@ -92,7 +92,7 @@ class PipelineController:
         
         # Determine which stages to run
         stages = list(self.core_stages)
-        
+
         # Insert system context stage early if requested
         if include_system_context:
             # Run after decomposition but before business stage
@@ -101,18 +101,37 @@ class PipelineController:
         for stage in stages:
             result = None
 
-            for attempt in range(self.MAX_RETRIES + 1):
+            stage_name = stage.__class__.__name__
+
+            # -------------------------------------------------
+            # Non-retry stages (deterministic / evaluation)
+            # -------------------------------------------------
+            if stage_name in {
+                "DomainValidationStage",
+                "DomainEnrichmentStage",
+                "DomainAdapterStage",
+            }:
                 result = stage.run(context)
 
-                if result.is_valid:
-                    break
-                
-                # 🔎 DEBUG: check decomposition output immediately
-            if stage.__class__.__name__ == "DecompositionStage":
+            # -------------------------------------------------
+            # Retry-enabled stages (LLM / inference / unstable)
+            # -------------------------------------------------
+            else:
+                for attempt in range(self.MAX_RETRIES + 1):
+                    result = stage.run(context)
+
+                    if result.is_valid:
+                        break
+
+            # 🔎 DEBUG: check decomposition output immediately
+            if stage_name == "DecompositionStage":
                 print("\n===== DEBUG: DECOMPOSITION OUTPUT =====")
                 print(context.decomposed)
                 print("======================================\n")
 
+            # -------------------------------------------------
+            # Hard stop on failure
+            # -------------------------------------------------
             if not result or not result.is_valid:
                 if result:
                     context.errors.extend(result.errors)

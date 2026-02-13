@@ -1,3 +1,5 @@
+#backend\app\pipeline\service_inference_stage.py
+
 from app.pipeline.stage import PipelineStage
 from app.pipeline.context import PipelineContext
 from app.ir.service_ir import ServiceIR, Service
