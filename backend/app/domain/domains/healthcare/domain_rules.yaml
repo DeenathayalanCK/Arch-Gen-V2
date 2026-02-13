@@ -9,26 +9,47 @@ baseline_services:
     name: Appointment Service
     type: logical
 
+  - id: audit_service
+    name: Audit Service
+    type: logical
+
+baseline_datastores:
+  - id: health_records_db
+    name: Health Records
+    type: database
+
+  - id: audit_db
+    name: Audit
+    type: database
+
 mandatory_dependencies:
-  - from: web_app
-    to: ehr_service
+  - from: Web Application
+    to: EHR Service
     interaction: calls
 
-  - from: appointment_service
-    to: ehr_service
+  - from: Appointment Service
+    to: EHR Service
     interaction: reads_writes
 
+  - from: EHR Service
+    to: Audit Service
+    interaction: logs_to
+
 baseline_responsibilities:
-  ehr_service:
+  EHR Service:
     - name: Manage patient records
       type: logic
 
     - name: Store clinical data
       type: persistence
 
-  appointment_service:
+  Appointment Service:
     - name: Schedule appointments
       type: logic
 
     - name: Notify patients
       type: integration
+
+  Audit Service:
+    - name: Record audit events
+      type: persistence
